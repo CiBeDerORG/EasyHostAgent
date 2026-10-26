@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：T00-01 已完成静态代码审查，其余 49 项均未开始**；“完成”必须提供提交、接口证据及对应任务范围内的验收结果。
+> 状态：**开发计划执行中：T00-01、T00-02 已完成文档/契约工作，其余 48 项未开始**；“完成”必须提供提交、接口证据及对应任务范围内的验收结果。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -25,7 +25,7 @@
 | 任务 | 仓库/负责人 | 前置 | 交付与验收 |
 |---|---|---|---|
 | **T00-01 [DONE]** 对齐已有 EasyTier 实现 | ET · Rust 后端 | 无 | **静态审查已提交**：[T00-01-easytier-audit.md](./T00-01-easytier-audit.md)；已列出复用/迁移清单、分支关系、设备删除冲突；未构建、未更改业务代码。 |
-| T00-02 定义 ET↔Agent API v1 | ET+EHA · 架构 | 无 | OpenAPI/JSON 规范：身份、配对、健康、主机、Docker、任务、部署包、升级；统一错误码/鉴权/超时；固定示例请求响应。 |
+| **T00-02 [DONE]** 定义 ET↔Agent API v1 | ET+EHA · 架构 | 无 | 已提交 [OpenAPI v1](./api/openapi-v1.json) + [契约说明与示例](./api/contract-v1.md)：15 个接口、23 个模型、7 份 JSON 示例；已校验内部引用、身份请求头、返回码和示例基本 schema。尚未实现或进行 Go/Rust 集成测试。 |
 | T00-03 定义 Deploy `app.yaml` v1 | DEP+ET · 架构 | 无 | 规范应用 ID、模板版本、Docker/Compose、变量、敏感项、默认值、端口优先级、动作能力、包依赖、安装验收规则；提供 schema 校验。 |
 | T00-04 定义持久化与身份归属 | ET+EHA · 后端 | T00-01/02 | `device_id`、`agent_id`、`app_id`、`instance_id`、`service_id`、`task_id` 不混用；明确 admin/owner 与删除级联规则。 |
 | T00-05 设立最小契约测试样本 | ET+EHA+DEP · 测试 | T00-02/03 | Portainer 单服务、Sub2API 多容器、独立 Docker 容器三套测试样本；所有 schema 能离线校验。 |
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01 [DONE]**（完成静态代码审查并提交报告），其余 **49 项 [TODO]**。下一个任务是 **T00-02**。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01、T00-02 [DONE]**（代码审查和 API 契约）；其余 **48 项 [TODO]**。下一个任务是 **T00-03：定义 Deploy app.yaml v1 标准**。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
