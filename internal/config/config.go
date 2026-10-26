@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	DefaultDataDir     = "/var/lib/easyhostagent"
-	DefaultLinuxRoot   = "/opt/software"
-	DefaultFnOSRoot    = "/vol3/1000/software"
-	EnvDataDir         = "EASYHOSTAGENT_DATA_DIR"
-	EnvSoftwareRoot    = "EASYHOSTAGENT_SOFTWARE_ROOT"
-	EnvLogLevel        = "EASYHOSTAGENT_LOG_LEVEL"
+	DefaultDataDir   = "/var/lib/easyhostagent"
+	DefaultLinuxRoot = "/opt/software"
+	DefaultFnOSRoot  = "/vol3/1000/software"
+	EnvDataDir       = "EASYHOSTAGENT_DATA_DIR"
+	EnvSoftwareRoot  = "EASYHOSTAGENT_SOFTWARE_ROOT"
+	EnvLogLevel      = "EASYHOSTAGENT_LOG_LEVEL"
 )
 
 // Config holds non-secret values only. Never log future auth credentials.
