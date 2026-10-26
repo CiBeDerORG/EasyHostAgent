@@ -24,9 +24,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Check gofmt
-        run: |
-          gofmt -w cmd internal
-          git diff --exit-code -- cmd internal
+        run: test -z "$(gofmt -l cmd internal)"
       - name: Run go vet
         run: go vet ./...
       - name: Run unit tests
