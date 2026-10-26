@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：T00-01～T00-04 已完成审查/接口/数据模型工作，其余 46 项未开始**；“完成”必须提供提交、接口证据及对应任务范围内的验收结果。
+> 状态：**开发计划执行中：M0 的 5 项设计与测试样本交付已完成，后续 45 项未开始；Deploy 合约 CI 尚未真正执行，需持续跟踪**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -28,7 +28,7 @@
 | **T00-02 [DONE]** 定义 ET↔Agent API v1 | ET+EHA · 架构 | 无 | 已提交 [OpenAPI v1](./api/openapi-v1.json) + [契约说明与示例](./api/contract-v1.md)：15 个接口、23 个模型、7 份 JSON 示例；已校验内部引用、身份请求头、返回码和示例基本 schema。尚未实现或进行 Go/Rust 集成测试。 |
 | **T00-03 [DONE]** 定义 Deploy `app.yaml` v1 | DEP+ET · 架构 | 无 | 已提交 Deploy [Schema](https://github.com/CiBeDerORG/deploy/blob/main/schema/app-manifest-v1.schema.json)、[Portainer](https://github.com/CiBeDerORG/deploy/blob/main/schema/examples/portainer.app.yaml)/[Sub2API](https://github.com/CiBeDerORG/deploy/blob/main/schema/examples/sub2api.app.yaml) 契约示例与[标准说明](https://github.com/CiBeDerORG/deploy/blob/main/docs/easyhostagent-app-manifest-v1.md)；[本轮检查记录](./T00-03-deploy-manifest.md)。完整 YAML/JSON Schema 校验器和 CI 属 T03-01。 |
 | **T00-04 [DONE]** 定义持久化与身份归属 | ET+EHA · 后端 | T00-01/02 | 已提交 [数据模型设计](./T00-04-data-model.md)、[拟议 SQLite DDL](./schema/T00-04-proposed.sql)；明确所有权、设备逻辑归档、Agent 解绑保留任务/应用/服务；使用 SQLite 最小 FK 样例做静态 smoke test，尚未运行正式数据库迁移。 |
-| T00-05 设立最小契约测试样本 | ET+EHA+DEP · 测试 | T00-02/03 | Portainer 单服务、Sub2API 多容器、独立 Docker 容器三套测试样本；所有 schema 能离线校验。 |
+| **T00-05 [DONE，Deploy CI 待恢复]** 最小契约测试样本 | ET+EHA+DEP · 测试 | T00-02/03 | 已提交 EHA 的 OpenAPI / SQLite 14 项测试、Portainer/Sub2API/独立容器及异常 Docker fixtures；Deploy 的 JSON Schema/YAML/Compose 6 项测试与两仓库 CI 工作流。[完整验收记录](./T00-05-contract-tests.md)。[EasyHostAgent CI 已通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40386121798)；[Deploy workflow 未执行测试即失败](https://github.com/CiBeDerORG/deploy/actions/runs/40386319978)，非全绿验收。 |
 
 ## 2. M1：Agent 主机接入（8 项）
 
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01、T00-02、T00-03、T00-04 [DONE]**（代码审查、HTTP API 契约、Deploy manifest 标准、数据归属模型）；其余 **46 项 [TODO]**。下一个任务是 **T00-05：最小 API/Deploy/数据库契约测试样本**。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05 [DONE]**（M0 契约/样本均已提交），余下 **45 项 [TODO]**。**CI 遗留阻塞：Deploy workflow 无步骤失败，恢复 Runner 后必须补测**。下一项是 **T01-01：Go Agent 项目初始化**。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
