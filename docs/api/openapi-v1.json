@@ -210,56 +210,13 @@
         "description": "Best effort while online. The controller must immediately discard its credential on local unbind. If host offline, host-side revocation cannot be asserted until local administrative reset or a successful new pairing.",
         "responses": {
           "204": {
-            "description": "Controller authorization revoked"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error400"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error401"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error403"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error404"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error409"
-          },
-          "413": {
-            "$ref": "#/components/responses/Error413"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error422"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error429"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error500"
-          },
-          "503": {
-            "$ref": "#/components/responses/Error503"
-          }
-        }
-      }
-    },
-    "/v1/host": {
-      "get": {
-        "tags": [
-          "Agent"
-        ],
-        "summary": "Query host resources and Docker availability on demand",
-        "operationId": "getHostSnapshot",
-        "description": "",
-        "responses": {
-          "200": {
-            "description": "Fresh snapshot",
-            "content": {
-              "application/json": {
+            "description": "Controller authorization revoked",
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
                 "schema": {
-                  "$ref": "#/components/schemas/HostSnapshot"
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -294,7 +251,84 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
+      }
+    },
+    "/v1/host": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Query host resources and Docker availability on demand",
+        "operationId": "getHostSnapshot",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Fresh snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostSnapshot"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
       }
     },
     "/v1/host/settings": {
@@ -324,56 +358,13 @@
                   "$ref": "#/components/schemas/HostSnapshot"
                 }
               }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/Error400"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error401"
-          },
-          "403": {
-            "$ref": "#/components/responses/Error403"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error404"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error409"
-          },
-          "413": {
-            "$ref": "#/components/responses/Error413"
-          },
-          "422": {
-            "$ref": "#/components/responses/Error422"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error429"
-          },
-          "500": {
-            "$ref": "#/components/responses/Error500"
-          },
-          "503": {
-            "$ref": "#/components/responses/Error503"
-          }
-        }
-      }
-    },
-    "/v1/docker/inventory": {
-      "get": {
-        "tags": [
-          "Agent"
-        ],
-        "summary": "Enumerate all Docker resources including stopped containers",
-        "operationId": "getDockerInventory",
-        "description": "When the Docker query fails, return complete=false, status=error and zero new authoritative deletions; do not silently return an empty successful inventory.",
-        "responses": {
-          "200": {
-            "description": "Docker inventory (can be incomplete, never delete on incomplete)",
-            "content": {
-              "application/json": {
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
                 "schema": {
-                  "$ref": "#/components/schemas/DockerInventory"
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -408,7 +399,84 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
+      }
+    },
+    "/v1/docker/inventory": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Enumerate all Docker resources including stopped containers",
+        "operationId": "getDockerInventory",
+        "description": "When the Docker query fails, return complete=false, status=error and zero new authoritative deletions; do not silently return an empty successful inventory.",
+        "responses": {
+          "200": {
+            "description": "Docker inventory (can be incomplete, never delete on incomplete)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DockerInventory"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
       }
     },
     "/v1/docker/resources/{resource_id}/logs": {
@@ -439,6 +507,12 @@
               "minimum": 1,
               "maximum": 500
             }
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
           }
         ],
         "responses": {
@@ -448,6 +522,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ResourceLogs"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -503,11 +586,26 @@
               "type": "string",
               "pattern": "^[a-f0-9]{64}$"
             }
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
           }
         ],
         "responses": {
           "204": {
-            "description": "Bundle present"
+            "description": "Bundle present",
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/Error400"
@@ -558,6 +656,12 @@
               "type": "string",
               "pattern": "^[a-f0-9]{64}$"
             }
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
           }
         ],
         "requestBody": {
@@ -580,6 +684,15 @@
                   "$ref": "#/components/schemas/BundleReceipt"
                 }
               }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
             }
           },
           "201": {
@@ -588,6 +701,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BundleReceipt"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -652,6 +774,15 @@
                   "$ref": "#/components/schemas/Task"
                 }
               }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
             }
           },
           "400": {
@@ -684,7 +815,15 @@
           "503": {
             "$ref": "#/components/responses/Error503"
           }
-        }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ]
       },
       "get": {
         "tags": [
@@ -714,6 +853,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
           }
         ],
         "responses": {
@@ -723,6 +868,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskPage"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -778,6 +932,12 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
           }
         ],
         "responses": {
@@ -787,6 +947,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -853,6 +1022,12 @@
               "minimum": 0,
               "default": 0
             }
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
           }
         ],
         "responses": {
@@ -862,6 +1037,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskLogChunk"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -917,6 +1101,12 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "$ref": "#/components/parameters/AgentId"
           }
         ],
         "responses": {
@@ -926,6 +1116,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "headers": {
+              "X-EHA-Agent-ID": {
+                "description": "Stable identity of response Agent",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               }
             }
@@ -1931,11 +2130,33 @@
           }
         }
       }
+    },
+    "parameters": {
+      "ControllerId": {
+        "name": "X-EHA-Controller-ID",
+        "in": "header",
+        "required": true,
+        "description": "Stable EasyTier controller installation UUID associated with the bearer token.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "AgentId": {
+        "name": "X-EHA-Agent-ID",
+        "in": "header",
+        "required": true,
+        "description": "Expected Agent UUID stored after pairing, checked against the server identity.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
     }
   },
   "x-eha-contract-notes": {
     "transport": "HTTPS mandatory. Pin SPKI SHA256 against locally shown fingerprint before any unauthenticated pairing. Do not disable verification, redirect or use ambient proxy; verify stable agent_id in response/header for authenticated requests.",
-    "binding": "EasyTier browser calls EasyTier Rust backend with existing user session. Only Rust backend calls this API. Client must send X-EHA-Controller-ID (controller UUID) and X-EHA-Agent-ID (expected UUID) for authenticated requests; agent validates token/controller/device binding. EasyTier validates returned agent_id, including after IP changes.",
+    "binding": "EasyTier browser calls EasyTier Rust backend with existing user session. Only Rust backend calls this API. Client must send X-EHA-Controller-ID (controller UUID) and X-EHA-Agent-ID (expected UUID) for authenticated requests; agent validates token/controller/device binding. EasyTier validates returned agent_id, including after IP changes. Header fields are declared for every protected operation under components.parameters; the controller cannot gain authority merely by spoofing an ID without the paired token.",
     "limits": {
       "connect_timeout_seconds": 3,
       "default_request_timeout_seconds": 15,
