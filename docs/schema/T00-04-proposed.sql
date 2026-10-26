@@ -43,13 +43,28 @@ CREATE TABLE host_agent_bindings (
     FOREIGN KEY (asset_device_id, owner_user_id, machine_id)
         REFERENCES asset_devices(id, owner_user_id, machine_id) ON DELETE RESTRICT
 );
-CREATE UNIQUE INDEX uq_host_agent_active_identity
-    ON host_agent_bindings(agent_id) WHERE binding_state = 'bound';
+-- Immutable Agent identity belongs to one host record (and thus one owner) forever.
+-- Re-pair to a new device reuses that record, preventing cross-owner host transfer.
+CREATE UNIQUE INDEX uq_host_agent_stable_identity
+    ON host_agent_bindings(agent_id);
 CREATE UNIQUE INDEX uq_host_agent_active_asset_device
     ON host_agent_bindings(owner_user_id, machine_id, asset_device_id)
     WHERE binding_state = 'bound';
 CREATE INDEX idx_host_agent_owner
     ON host_agent_bindings(owner_user_id, binding_state);
+
+-- Prevent legacy hard DELETE of a device with services from silently cascading.
+-- The future Rust delete handler must ARCHIVE instead when there are dependencies.
+CREATE TRIGGER guard_asset_device_hard_delete_with_services
+BEFORE DELETE ON asset_devices
+WHEN EXISTS (
+    SELECT 1 FROM asset_services s
+    WHERE s.device_id = OLD.id AND s.owner_user_id = OLD.owner_user_id
+      AND s.machine_id = OLD.machine_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'archive_asset_device_with_services_first');
+END;
 
 -- Application is NOT a child of asset_devices: deleting or archiving that device
 -- must never cascade away its managed app history. All app data belongs to the
@@ -135,4 +150,5 @@ CREATE INDEX idx_host_binding_events
 --   SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'uq_host_%';
 -- DO NOT DROP deploy_agents ON UNBIND:
 -- current deploy_tasks(connection_id) ON DELETE CASCADE would erase task history.
+-- The new host_agent_bindings FK also restricts deleting the persistent parent.
 -- Must change legacy DELETE /api/v1/deploy/agents/{id} to an authorization unbind/retire.
