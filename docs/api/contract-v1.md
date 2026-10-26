@@ -185,7 +185,7 @@ GET /v1/tasks/44444444-4444-4444-8444-444444444444/logs?offset=0
   "agent_id": "11111111-1111-4111-8111-111111111111",
   "task_id": "44444444-4444-4444-8444-444444444444",
   "offset": 0,
-  "next_offset": 16,
+  "next_offset": 15,
   "text": "Step 1 started\n",
   "eof": false,
   "truncated": false
