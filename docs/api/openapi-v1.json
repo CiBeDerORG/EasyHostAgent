@@ -1,0 +1,1956 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EasyHostAgent HTTP API",
+    "version": "1.0.0-draft",
+    "description": "Agent-side contract for EasyTier↔EasyHostAgent. Controller-side browser API is NOT defined here. Docker/Compose only in v1; passive calls, no heartbeat, no remote Git, no automatic rollback."
+  },
+  "servers": [
+    {
+      "url": "https://{agentAddress}:{port}",
+      "variables": {
+        "agentAddress": {
+          "default": "127.0.0.1",
+          "description": "Address chosen from verified EasyTier device IP after explicit user request"
+        },
+        "port": {
+          "default": "7014"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Agent",
+      "description": "On-demand control plane. Never call periodically as a heartbeat."
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Check whether the Agent API process is reachable",
+        "operationId": "getHealth",
+        "description": "",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Minimal readiness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/identity": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Read unauthenticated Agent identity for explicit trust bootstrap",
+        "operationId": "getIdentity",
+        "description": "",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Identity; MUST verify SPKI fingerprint out of band before pairing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/pairings": {
+      "post": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Exchange local one-time pairing code for a controller-specific token",
+        "operationId": "createPairing",
+        "description": "Requires verified TLS pin established out-of-band first. One-time code expires within 10 minutes, limited attempts, one use. Successful new pairing invalidates prior bearer grants; re-pair authorization must be enabled locally while already bound.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pairing succeeds, credential delivered once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/pairings/current": {
+      "delete": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Revoke the current controller authorization",
+        "operationId": "revokePairing",
+        "description": "Best effort while online. The controller must immediately discard its credential on local unbind. If host offline, host-side revocation cannot be asserted until local administrative reset or a successful new pairing.",
+        "responses": {
+          "204": {
+            "description": "Controller authorization revoked"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/host": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Query host resources and Docker availability on demand",
+        "operationId": "getHostSnapshot",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Fresh snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/host/settings": {
+      "patch": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Change SOFTWARE_ROOT only when no managed applications exist",
+        "operationId": "updateHostSettings",
+        "description": "Canonicalize path and reject symlinks/path escapes and updates when managed apps exist; never move data automatically.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HostSettingsPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/docker/inventory": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Enumerate all Docker resources including stopped containers",
+        "operationId": "getDockerInventory",
+        "description": "When the Docker query fails, return complete=false, status=error and zero new authoritative deletions; do not silently return an empty successful inventory.",
+        "responses": {
+          "200": {
+            "description": "Docker inventory (can be incomplete, never delete on incomplete)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DockerInventory"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/docker/resources/{resource_id}/logs": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Read logs for a known Docker resource",
+        "operationId": "getDockerResourceLogs",
+        "description": "",
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "description": "Opaque identifier from inventory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "required": false,
+            "description": "Maximum log lines",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded log snippet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceLogs"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/bundles/{sha256}": {
+      "head": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Check whether immutable deployment bundle is present",
+        "operationId": "checkBundle",
+        "description": "",
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "description": "SHA-256 digest",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Bundle present"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Upload immutable Deploy artifact received from EasyTier",
+        "operationId": "putBundle",
+        "description": "Max 64 MiB, streaming bounded verification; reject archive traversal, symlinks, special device entries and unsupported file types. Bundle is not executed upon upload; allowlisted task actions only. Identical digest PUT is idempotent.",
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "description": "Expected lower-case SHA-256 of exact bytes",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Same content already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleReceipt"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Stored and verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/tasks": {
+      "post": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Submit an asynchronous allowlisted operation",
+        "operationId": "createTask",
+        "description": "Persist before returning HTTP 202. Same task_id with same canonical request digest returns existing task without executing twice; conflicting digest gets HTTP 409. All operations, including start/stop/restart and host upgrades, use tasks. No rollback and no offline queue.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Task durably accepted or duplicate returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "List persisted tasks for page reopen",
+        "operationId": "listTasks",
+        "description": "",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Read durable task state on demand",
+        "operationId": "getTask",
+        "description": "",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "description": "Task UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task_id}/logs": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Fetch incremental UTF-8 log chunk by byte offset",
+        "operationId": "getTaskLogs",
+        "description": "Offset is an agent-generated byte cursor and is monotonic. Secrets and pairing tokens must be redacted. This API has no streaming/WebSocket requirement.",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "description": "Task UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Byte offset, not characters",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "At most 256 KiB of new text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskLogChunk"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task_id}/cancel": {
+      "post": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Request safe task cancellation without rollback",
+        "operationId": "cancelTask",
+        "description": "Cancellation is best effort at safe checkpoints, not destructive cleanup. Mark final cancelled/failed on result; preserve generated resources and logs.",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "description": "Task UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Cancellation requested or terminal task unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque",
+        "description": "High-entropy per-controller token returned exactly once by pairing. EasyTier stores encrypted; not JWT, not user session token."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable stable error code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe user-readable error; never includes secret values."
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Request correlation ID."
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "additionalProperties": false
+      },
+      "Identity": {
+        "type": "object",
+        "properties": {
+          "protocol_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "Stable random UUID generated at installation.",
+            "format": "uuid"
+          },
+          "hostname": {
+            "type": "string",
+            "description": "Host display name."
+          },
+          "platform": {
+            "type": "string",
+            "description": "fnos/linux or supported variant."
+          },
+          "arch": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm64",
+              "other"
+            ],
+            "description": "Executable architecture."
+          },
+          "version": {
+            "type": "string",
+            "description": "Agent semantic version."
+          },
+          "tls_spki_sha256": {
+            "type": "string",
+            "description": "Lowercase hexadecimal SHA-256 of DER SubjectPublicKeyInfo. Must be verified out-of-band; identity response alone is untrusted.",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "observed_at": {
+            "type": "string",
+            "description": "RFC3339 UTC timestamp.",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "agent_id",
+          "hostname",
+          "platform",
+          "arch",
+          "version",
+          "tls_spki_sha256",
+          "observed_at"
+        ],
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "degraded"
+            ],
+            "description": "Agent readiness."
+          },
+          "protocol_version": {
+            "type": "integer",
+            "const": 1
+          }
+        },
+        "required": [
+          "status",
+          "protocol_version"
+        ],
+        "additionalProperties": false
+      },
+      "PairingRequest": {
+        "type": "object",
+        "properties": {
+          "controller_id": {
+            "type": "string",
+            "description": "Stable UUID of EasyTier controller installation; not the user ID.",
+            "format": "uuid"
+          },
+          "device_id": {
+            "type": "string",
+            "description": "Existing EasyTier asset device UUID.",
+            "format": "uuid"
+          },
+          "pairing_code": {
+            "type": "string",
+            "description": "One-time code read from local Agent CLI; never logged.",
+            "minLength": 8,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "controller_id",
+          "device_id",
+          "pairing_code"
+        ],
+        "additionalProperties": false
+      },
+      "PairingResult": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Paired Agent identity.",
+            "format": "uuid"
+          },
+          "controller_id": {
+            "type": "string",
+            "description": "Paired controller installation ID.",
+            "format": "uuid"
+          },
+          "device_id": {
+            "type": "string",
+            "description": "Selected existing asset device ID.",
+            "format": "uuid"
+          },
+          "access_token": {
+            "type": "string",
+            "description": "High-entropy bearer token shown once, stored encrypted by EasyTier; do not log.",
+            "minLength": 32
+          },
+          "paired_at": {
+            "type": "string",
+            "description": "UTC time.",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "agent_id",
+          "controller_id",
+          "device_id",
+          "access_token",
+          "paired_at"
+        ],
+        "additionalProperties": false
+      },
+      "Cpu": {
+        "type": "object",
+        "properties": {
+          "logical_cores": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "usage_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "logical_cores"
+        ],
+        "additionalProperties": false
+      },
+      "Memory": {
+        "type": "object",
+        "properties": {
+          "total_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "used_bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "total_bytes",
+          "used_bytes"
+        ],
+        "additionalProperties": false
+      },
+      "Disk": {
+        "type": "object",
+        "properties": {
+          "mount": {
+            "type": "string",
+            "description": "Filesystem mount point."
+          },
+          "total_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available_bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "mount",
+          "total_bytes",
+          "available_bytes"
+        ],
+        "additionalProperties": false
+      },
+      "DockerCapability": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "engine_version": {
+            "type": "string",
+            "description": "Docker Engine version."
+          },
+          "compose_available": {
+            "type": "boolean"
+          },
+          "compose_version": {
+            "type": "string",
+            "description": "Compose CLI plugin version."
+          },
+          "error": {
+            "type": "string",
+            "description": "Sanitized error when unavailable."
+          }
+        },
+        "required": [
+          "available",
+          "compose_available"
+        ],
+        "additionalProperties": false
+      },
+      "HostSnapshot": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Agent UUID.",
+            "format": "uuid"
+          },
+          "observed_at": {
+            "type": "string",
+            "description": "UTC timestamp.",
+            "format": "date-time"
+          },
+          "hostname": {
+            "type": "string",
+            "description": "Host name."
+          },
+          "platform": {
+            "type": "string",
+            "description": "Linux distribution or FnOS."
+          },
+          "arch": {
+            "type": "string",
+            "description": "CPU arch."
+          },
+          "cpu": {
+            "$ref": "#/components/schemas/Cpu"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/Memory"
+          },
+          "disks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Disk"
+            }
+          },
+          "docker": {
+            "$ref": "#/components/schemas/DockerCapability"
+          },
+          "software_root": {
+            "type": "string",
+            "description": "Absolute path configured for managed apps."
+          }
+        },
+        "required": [
+          "agent_id",
+          "observed_at",
+          "hostname",
+          "platform",
+          "arch",
+          "cpu",
+          "memory",
+          "disks",
+          "docker",
+          "software_root"
+        ],
+        "additionalProperties": false
+      },
+      "HostSettingsPatch": {
+        "type": "object",
+        "properties": {
+          "software_root": {
+            "type": "string",
+            "description": "Canonical absolute installation root. Reject while managed applications exist.",
+            "minLength": 2,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "software_root"
+        ],
+        "additionalProperties": false
+      },
+      "Port": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "tcp",
+              "udp"
+            ],
+            "description": "Transport protocol."
+          },
+          "host_ip": {
+            "type": "string",
+            "description": "Published host IP; empty means wildcard."
+          },
+          "host_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "container_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "is_web": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "protocol",
+          "host_port",
+          "container_port"
+        ],
+        "additionalProperties": false
+      },
+      "Container": {
+        "type": "object",
+        "properties": {
+          "container_id": {
+            "type": "string",
+            "description": "Full Docker container ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Container name."
+          },
+          "image": {
+            "type": "string",
+            "description": "Image reference or digest."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "created",
+              "running",
+              "restarting",
+              "paused",
+              "exited",
+              "dead",
+              "unknown"
+            ],
+            "description": "Docker observed state."
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Port"
+            }
+          }
+        },
+        "required": [
+          "container_id",
+          "name",
+          "state",
+          "ports"
+        ],
+        "additionalProperties": false
+      },
+      "Resource": {
+        "type": "object",
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "description": "Opaque stable per Docker scan resource identifier; use unchanged in subsequent API requests."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "compose_project",
+              "container"
+            ],
+            "description": "Compose project or standalone container."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "stopped",
+              "partial",
+              "unknown"
+            ],
+            "description": "Aggregated state."
+          },
+          "compose_project": {
+            "type": "string",
+            "description": "Present for Compose project."
+          },
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Container"
+            }
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Port"
+            }
+          }
+        },
+        "required": [
+          "resource_id",
+          "kind",
+          "name",
+          "state",
+          "containers",
+          "managed",
+          "ports"
+        ],
+        "additionalProperties": false
+      },
+      "DockerInventory": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Agent UUID.",
+            "format": "uuid"
+          },
+          "observed_at": {
+            "type": "string",
+            "description": "UTC timestamp.",
+            "format": "date-time"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "Only true when Docker enumerated all resources successfully. NEVER infer deletions from incomplete=false."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error"
+            ],
+            "description": "Docker provider status."
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Resource"
+            }
+          },
+          "error": {
+            "type": "string",
+            "description": "Sanitized Docker provider error."
+          }
+        },
+        "required": [
+          "agent_id",
+          "observed_at",
+          "complete",
+          "status",
+          "resources"
+        ],
+        "additionalProperties": false
+      },
+      "ResourceLogs": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Agent UUID.",
+            "format": "uuid"
+          },
+          "resource_id": {
+            "type": "string",
+            "description": "Opaque resource ID."
+          },
+          "text": {
+            "type": "string",
+            "description": "Bounded log text; UTF-8 best effort."
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agent_id",
+          "resource_id",
+          "text",
+          "truncated"
+        ],
+        "additionalProperties": false
+      },
+      "BundleReceipt": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Agent UUID.",
+            "format": "uuid"
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Content digest.",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "already_exists": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agent_id",
+          "sha256",
+          "size_bytes",
+          "already_exists"
+        ],
+        "additionalProperties": false
+      },
+      "TaskStart": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "Client-generated UUID; key for idempotency and unknown submission recovery.",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "application",
+              "docker_resource",
+              "host"
+            ],
+            "description": "Type of controlled resource."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "install",
+              "update",
+              "uninstall",
+              "configure",
+              "adopt",
+              "start",
+              "stop",
+              "restart",
+              "install_docker",
+              "upgrade_agent"
+            ],
+            "description": "Allowlisted operation. Not an arbitrary shell command."
+          },
+          "application_id": {
+            "type": "string",
+            "description": "Deploy catalog app ID when kind=application."
+          },
+          "resource_id": {
+            "type": "string",
+            "description": "Opaque Docker resource ID when targeting discovered external resource."
+          },
+          "bundle_sha256": {
+            "type": "string",
+            "description": "Previously uploaded immutable bundle digest.",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "catalog_revision": {
+            "type": "string",
+            "description": "Central Deploy source commit/revision, for audit only."
+          },
+          "variant": {
+            "type": "string",
+            "description": "Manifest-declared runtime variant; first phase docker/compose."
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Manifest-declared parameters only; reject unknown fields."
+          },
+          "secrets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Manifest-declared sensitive parameters; encrypted at rest and removed from all responses/logs."
+          },
+          "options": {
+            "$ref": "#/components/schemas/TaskOptions"
+          }
+        },
+        "required": [
+          "task_id",
+          "kind",
+          "action"
+        ],
+        "additionalProperties": false,
+        "description": "For install/update/configure/adopt, application bundle and manifest validation apply. For uninstall, retain_data defaults true. No automatic rollback."
+      },
+      "TaskOptions": {
+        "type": "object",
+        "properties": {
+          "retain_data": {
+            "type": "boolean",
+            "default": true
+          },
+          "confirm_delete_data": {
+            "type": "boolean",
+            "default": false
+          },
+          "reuse_existing_data": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "description": "Destructive data removal requires retain_data=false AND confirm_delete_data=true. If existing historical data is detected, caller must make an explicit reuse choice."
+      },
+      "TaskResult": {
+        "type": "object",
+        "properties": {
+          "observed_ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Port"
+            }
+          },
+          "managed_resource_id": {
+            "type": "string",
+            "description": "Resulting managed Docker resource ID."
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe operation result summary."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Agent UUID.",
+            "format": "uuid"
+          },
+          "task_id": {
+            "type": "string",
+            "description": "Task UUID.",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "application",
+              "docker_resource",
+              "host"
+            ],
+            "description": "Resource kind."
+          },
+          "action": {
+            "type": "string",
+            "description": "Allowlisted task action."
+          },
+          "application_id": {
+            "type": "string",
+            "description": "App id."
+          },
+          "resource_id": {
+            "type": "string",
+            "description": "Docker resource id."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "running",
+              "cancelling",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ],
+            "description": "Agent-local durable task state. outcome_unknown is controller-only when an HTTP submission response is lost."
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe operation message."
+          },
+          "exit_code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "description": "UTC timestamp.",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "UTC timestamp.",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "log_offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "result": {
+            "$ref": "#/components/schemas/TaskResult"
+          }
+        },
+        "required": [
+          "agent_id",
+          "task_id",
+          "kind",
+          "action",
+          "status",
+          "created_at",
+          "updated_at",
+          "log_offset"
+        ],
+        "additionalProperties": false
+      },
+      "TaskPage": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Agent UUID.",
+            "format": "uuid"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "agent_id",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "TaskLogChunk": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "Agent UUID.",
+            "format": "uuid"
+          },
+          "task_id": {
+            "type": "string",
+            "description": "Task UUID.",
+            "format": "uuid"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "next_offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "text": {
+            "type": "string",
+            "description": "UTF-8 decoded text chunk with no secrets."
+          },
+          "eof": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agent_id",
+          "task_id",
+          "offset",
+          "next_offset",
+          "text",
+          "eof",
+          "truncated"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Malformed input",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "Missing or invalid bearer token",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Not authorized for this bound controller/device",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Conflict, task ID collision or illegal state",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error413": {
+        "description": "Body exceeds configured limits",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error422": {
+        "description": "Validated but unsupported input, host or operation",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error429": {
+        "description": "Pairing rate limit exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error500": {
+        "description": "Agent internal error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error503": {
+        "description": "Agent or Docker capability unavailable",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-eha-contract-notes": {
+    "transport": "HTTPS mandatory. Pin SPKI SHA256 against locally shown fingerprint before any unauthenticated pairing. Do not disable verification, redirect or use ambient proxy; verify stable agent_id in response/header for authenticated requests.",
+    "binding": "EasyTier browser calls EasyTier Rust backend with existing user session. Only Rust backend calls this API. Client must send X-EHA-Controller-ID (controller UUID) and X-EHA-Agent-ID (expected UUID) for authenticated requests; agent validates token/controller/device binding. EasyTier validates returned agent_id, including after IP changes.",
+    "limits": {
+      "connect_timeout_seconds": 3,
+      "default_request_timeout_seconds": 15,
+      "task_submission_timeout_seconds": 15,
+      "bundle_upload_timeout_seconds": 180,
+      "json_response_max_bytes": 8388608,
+      "bundle_max_bytes": 67108864,
+      "log_chunk_max_bytes": 262144,
+      "pairing_ttl_seconds": 600,
+      "pairing_attempts_per_window": 5,
+      "pairing_window_seconds": 600
+    },
+    "behavior": "HTTP tasks return immediately and persist locally; no automated task polling when page is closed, no lost-request auto retry without same task_id, no automatic cleanup/rollback after errors.",
+    "inventory": "complete=false or Docker provider error is never evidence of deleted applications. Stopped resources still exist.",
+    "controller_reconciliation": "EasyTier alone owns app templates, service creation/deletion, public mappings, store Git pull and authorization of admin vs own devices. Failure of service binding is stored as separately retryable state; never remove an otherwise successful Docker install.",
+    "agent_restart": "Previously running operations are recorded as interrupted/failed with logs retained; do not auto retry or rollback."
+  }
+}
