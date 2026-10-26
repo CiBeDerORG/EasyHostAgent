@@ -1,0 +1,41 @@
+{
+  "agent_id": "11111111-1111-4111-8111-111111111111",
+  "observed_at": "2026-10-27T00:00:00Z",
+  "complete": true,
+  "status": "ok",
+  "resources": [
+    {
+      "resource_id": "container:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "kind": "container",
+      "name": "manual-nginx",
+      "state": "running",
+      "managed": false,
+      "ports": [
+        {
+          "protocol": "tcp",
+          "host_ip": "0.0.0.0",
+          "host_port": 8888,
+          "container_port": 80,
+          "is_web": true
+        }
+      ],
+      "containers": [
+        {
+          "container_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "name": "manual-nginx",
+          "image": "nginx:stable",
+          "state": "running",
+          "ports": [
+            {
+              "protocol": "tcp",
+              "host_ip": "0.0.0.0",
+              "host_port": 8888,
+              "container_port": 80,
+              "is_web": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
