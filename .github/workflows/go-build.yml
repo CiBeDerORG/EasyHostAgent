@@ -1,0 +1,60 @@
+name: Go Agent Foundation
+
+on:
+  push:
+    paths:
+      - "go.mod"
+      - "cmd/**"
+      - "internal/**"
+      - ".github/workflows/go-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Format, vet, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Check gofmt
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Run go vet
+        run: go vet ./...
+      - name: Run unit tests
+        run: go test -race ./...
+
+  cross-compile:
+    name: Linux ${{ matrix.arch }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Compile Linux static binary
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags "-s -w -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Version=0.1.0-dev -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Commit=${GITHUB_SHA}"             -o "dist/easyhostagent-linux-${GOARCH}" ./cmd/easyhostagent
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easyhostagent-foundation-linux-${{ matrix.arch }}
+          path: dist/easyhostagent-linux-${{ matrix.arch }}
+          retention-days: 7
