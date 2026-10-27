@@ -1,17 +1,20 @@
 # EasyHostAgent
 
-EasyHostAgent 是 EasyTier 的 Go 原生主机执行代理。该仓库目前处于 **T01-02 原生安装器完成、T01-03 HTTP 身份服务尚未开始**，首期目标为 Linux / FnOS 上的 Docker / Docker Compose 管理。
+EasyHostAgent 是 EasyTier 的 Go 原生主机执行代理。该仓库目前处于 **T01-03 HTTPS 身份服务开发阶段**，首期目标为 Linux / FnOS 上的 Docker / Docker Compose 管理。
 
 > **注意：当前版本仅为可启动/可退出的程序骨架，不提供 HTTP/HTTPS 接口，也不能配对、查询 Docker 或安装应用。请勿将其当作可以实际部署使用的 Agent。**
 
 ## 工程结构
 
 ```text
-cmd/easyhostagent/       CLI 入口（-version、-check-config、信号退出）
-internal/app/            主程序生命周期（暂不监听端口、不建立后台任务）
+cmd/easyhostagent/       CLI 入口（-version、-check-config、-identity、信号退出）
+internal/app/            TLS 1.3 服务生命周期与优雅退出
 internal/config/         软件根目录、状态目录、日志等级
 internal/logging/        标准库 log/slog JSON 结构化日志
 internal/buildinfo/      构建版本元数据
+internal/identity/       私有身份状态文件、Agent UUID、TLS 证书与指纹
+internal/httpapi/        HTTPS health / identity API
+internal/auth/           默认拒绝的 Bearer 鉴权中间件（配对待实现）
 docs/                    架构与协议文档
 tests/contracts/         M0 契约测试和 Docker 示例
 ```
@@ -28,7 +31,7 @@ go build -trimpath -o bin/easyhostagent ./cmd/easyhostagent
 ./bin/easyhostagent -check-config
 ```
 
-运行骨架（输出一次启动日志，等待 SIGTERM/SIGINT 后退出）：
+运行身份发现服务（输出启动日志，HTTPS 监听 7014 端口，等待 SIGTERM/SIGINT）：
 
 ```bash
 ./bin/easyhostagent
@@ -87,6 +90,29 @@ sudo bash scripts/uninstall.sh
 
 [FnOS/Linux 安装器测试记录](docs/T01-02-native-installer.md) · [安装器 CI](https://github.com/CiBeDerORG/EasyHostAgent/actions/workflows/installer-tests.yml)
 
+## Agent 身份与 HTTPS 接口（T01-03）
+
+首次运行时，Agent 在 `EASYHOSTAGENT_DATA_DIR/identity.json` 生成稳定 UUID、ECDSA P-256 私钥与自签名证书。目录权限要求 0700，状态文件 0600；证书/状态损坏时拒绝启动，**绝不自动重新生成身份并覆盖现有密钥**。
+
+本地终端显示唯一身份与需要人工核对的 SPKI SHA-256 公钥指纹：
+
+```bash
+sudo /usr/local/bin/easyhostagent -identity
+```
+
+HTTPS API v1 暂时仅实现以下两个无需 Token 的发现接口：
+
+| 请求 | 返回 |
+|---|---|
+| `GET https://设备IP:7014/v1/health` | `{ "status": "ready", "protocol_version": 1 }` |
+| `GET https://设备IP:7014/v1/identity` | Agent UUID、主机名、平台、架构、版本、公钥 SHA-256、时间 |
+
+**重要**：当前证书是自签名证书，普通 HTTPS 客户端没有自动信任链。后续 EasyTier 必须通过用户在宿主机可信终端核对的 SPKI 指纹固定证书信任，绝对不能因为网络接口自己返回同样的指纹就认为已认证，也不能在配对/管理链路中跳过 TLS 认证。
+
+HTTPS 默认监听 `0.0.0.0:7014`，可在初次安装或编辑 `/etc/easyhostagent/agent.env` 添加 `EASYHOSTAGENT_LISTEN_ADDRESS=127.0.0.1:7014` 限制为本机。由于默认允许本地网络连接，请用路由器/宿主机防火墙仅放行可信 EasyTier 控制端；无需将 7014 映射到公网。
+
+**目前没有开放任何配对、安装、脚本、Docker 管理或其它有副作用的远程操作接口。** 受保护路由的 Bearer 与控制端/Agent 身份检查中间件已建立，但在下一任务 T01-04 持久化实际的配对授权之前，默认拒绝所有未授权调用。
+
 ## 配置（环境变量）
 
 | 变量 | Linux 默认值 | FnOS 检测后默认值 |
@@ -94,16 +120,17 @@ sudo bash scripts/uninstall.sh
 | `EASYHOSTAGENT_DATA_DIR` | `/var/lib/easyhostagent` | `/var/lib/easyhostagent` |
 | `EASYHOSTAGENT_SOFTWARE_ROOT` | `/opt/software` | `/vol3/1000/software` |
 | `EASYHOSTAGENT_LOG_LEVEL` | `info` | `info` |
+| `EASYHOSTAGENT_LISTEN_ADDRESS` | `0.0.0.0:7014` | `0.0.0.0:7014` |
 
 FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-release` 进行保守的识别；用户可使用 `EASYHOSTAGENT_SOFTWARE_ROOT` 明确覆盖。后续 T01-07 负责完善 FnOS 兼容与 UI 可配置路径，以及存在受管应用时禁止直接迁移目录的业务规则。
 
-配置校验仅读取参数，不会创建目录、修改文件或运行 Docker。日志使用 JSON Lines，标准输出可由 systemd/journald 收集；**当前代码未声明监听地址，也不对外开放接口**。
+配置校验仅读取参数，不会创建目录、修改文件或运行 Docker。身份命令会在首次调用时写入本地受保护的身份状态。日志使用 JSON Lines，标准输出可由 systemd/journald 收集；目前仅开放 HTTPS 身份发现接口。
 
 ## 任务路线
 
 - **T01-01**：Go 工程骨架、配置、日志、构建与单元测试。
 - **T01-02（完成）**：FnOS/Linux 安装脚本和 systemd unit（实机验收仍需目标机器）。
-- **T01-03**：持久 Agent 身份、HTTPS API 和授权。
+- **T01-03（已实现，待 CI 最终验证）**：持久 Agent 身份、TLS 1.3 HTTPS 身份发现及默认拒绝的授权中间件。
 - **T01-04**：一次性配对码。
 - **T02**：Docker 基础管理。
 - **T03/T04**：中央 Deploy 部署包、应用管理任务。
