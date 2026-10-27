@@ -79,6 +79,8 @@ func NewHandler(state identity.State, platform, version string, stores ...*pairi
 					sendError(w, http.StatusTooManyRequests, "pairing_attempts_exhausted", "Generate a new code on the host")
 				case errors.Is(e, pairing.ErrInvalidCode):
 					sendError(w, http.StatusUnauthorized, "invalid_pairing_code", "Pairing code not accepted")
+				case errors.Is(e, pairing.ErrInvalidIDs):
+					sendError(w, http.StatusUnprocessableEntity, "invalid_identity", "Invalid controller or device identifier")
 				case errors.Is(e, pairing.ErrNoCode), errors.Is(e, pairing.ErrExpired):
 					sendError(w, http.StatusForbidden, "pairing_window_closed", "Open a new local pairing window")
 				default:
