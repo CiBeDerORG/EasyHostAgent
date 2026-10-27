@@ -18,9 +18,9 @@ UMask=0077
 LimitNOFILE=65536
 NoNewPrivileges=true
 
-# Intentionally no ProtectSystem=strict or ProtectHome=true yet:
-# the future Docker/Compose adapter must write to configurable SOFTWARE_ROOT.
-# T01-03 will add HTTPS auth; T01-02 binary currently opens no network ports.
+# Only GET /v1/health and GET /v1/identity exist before T01-04 pairing.
+# Management requests are NOT enabled without authenticated controller binding.
+# ProtectSystem/ProtectHome are reserved for Docker/Compose path compatibility.
 
 [Install]
 WantedBy=multi-user.target

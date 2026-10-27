@@ -1,6 +1,6 @@
-// EasyHostAgent - lightweight native host service for EasyTier.
+// EasyHostAgent - a native HTTPS host management agent for EasyTier.
 //
-// T01-01 foundation only: no server port, pairing or Docker calls yet.
+// T01-03 exposes only unprivileged health and identity APIs. Pairing in T01-04.
 package main
 
 import (
@@ -15,6 +15,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/app"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
 )
 
@@ -27,9 +28,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	showVersion := flags.Bool("version", false, "print build version")
 	checkConfig := flags.Bool("check-config", false, "validate configuration and exit")
-	if err := flags.Parse(args); err != nil {
-		return 2
-	}
+	showIdentity := flags.Bool("identity",false,"show stable Agent ID and TLS public key fingerprint locally")
+	if err := flags.Parse(args); err != nil {return 2}
 	if flags.NArg() != 0 {
 		fmt.Fprintln(stderr, "unexpected arguments:", flags.Args())
 		return 2
@@ -45,8 +45,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if *checkConfig {
-		fmt.Fprintf(stdout, "configuration valid: data_dir=%s software_root=%s log_level=%s\n",
-			cfg.DataDir, cfg.SoftwareRoot, cfg.LogLevel)
+		fmt.Fprintf(stdout, "configuration valid: data_dir=%s software_root=%s listen=%s log_level=%s\n",
+			cfg.DataDir, cfg.SoftwareRoot,cfg.ListenAddr,cfg.LogLevel)
+		return 0
+	}
+	if *showIdentity {
+		state,err:=identity.LoadOrCreate(cfg.DataDir)
+		if err!=nil {fmt.Fprintln(stderr,"identity error:",err);return 1}
+		fmt.Fprintf(stdout,"Agent ID: %s\nTLS SPKI SHA-256: %s\n",state.AgentID,state.SPKISHA256)
 		return 0
 	}
 
