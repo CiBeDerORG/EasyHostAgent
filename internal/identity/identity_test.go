@@ -11,7 +11,7 @@ import (
 )
 
 func TestStableAndPrivateIdentity(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "state")
 	first, err := LoadOrCreate(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestStableAndPrivateIdentity(t *testing.T) {
 }
 
 func TestCorruptIdentityNeverRegenerated(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "state")
 	if _, err := LoadOrCreate(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,8 @@ func TestCorruptIdentityNeverRegenerated(t *testing.T) {
 }
 
 func TestIdentityCannotBeSymlink(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "state")
+	if err := os.Mkdir(dir, 0700); err != nil { t.Fatal(err) }
 	target := filepath.Join(t.TempDir(), "outside")
 	if err := os.WriteFile(target, []byte("private"), 0600); err != nil {
 		t.Fatal(err)
@@ -84,7 +85,7 @@ func TestIdentityDirectoryMustBePrivate(t *testing.T) {
 	}
 }
 func TestConcurrentLoadCreatesOneIdentity(t *testing.T) {
-	dir := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "state")
 	var wg sync.WaitGroup
 	ids := make([]string, 12)
 	for i := range ids {
