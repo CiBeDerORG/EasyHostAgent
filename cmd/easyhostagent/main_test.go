@@ -28,7 +28,7 @@ func TestCheckConfig(t *testing.T) {
 	}
 }
 func TestLocalIdentityCommandIsStable(t *testing.T) {
-	t.Setenv("EASYHOSTAGENT_DATA_DIR", t.TempDir())
+	t.Setenv("EASYHOSTAGENT_DATA_DIR", filepath.Join(t.TempDir(), "state"))
 	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/opt/software")
 	var first, second, errors bytes.Buffer
 	if code := run([]string{"-identity"}, &first, &errors); code != 0 {
