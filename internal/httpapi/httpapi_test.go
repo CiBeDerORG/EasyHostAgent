@@ -3,7 +3,6 @@ package httpapi
 import (
 	"crypto/tls"
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 
