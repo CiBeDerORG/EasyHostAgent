@@ -1,4 +1,4 @@
-name: Go Agent HTTPS Identity and Pairing
+name: Go Agent HTTPS Identity Pairing and Controller Check
 
 on:
   push:
