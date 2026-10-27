@@ -1,4 +1,4 @@
-name: Go Agent Foundation and HTTPS Identity
+name: Go Agent HTTPS Identity and Pairing
 
 on:
   push:
