@@ -16,12 +16,17 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	state, err := identity.LoadOrCreate(cfg.DataDir)
 	if err != nil {
 		return fmt.Errorf("load identity: %w", err)
+	}
+	store, err := pairing.New(cfg.DataDir, state.AgentID)
+	if err != nil {
+		return fmt.Errorf("load controller authorization: %w", err)
 	}
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
@@ -32,7 +37,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandler(state, cfg.Platform, buildinfo.Version),
+		Handler:           httpapi.NewHandler(state, cfg.Platform, buildinfo.Version, store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
