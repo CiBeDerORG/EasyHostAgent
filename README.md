@@ -1,20 +1,21 @@
 # EasyHostAgent
 
-EasyHostAgent 是 EasyTier 的 Go 原生主机执行代理。该仓库目前处于 **T01-03 HTTPS 身份服务开发阶段**，首期目标为 Linux / FnOS 上的 Docker / Docker Compose 管理。
+EasyHostAgent 是 EasyTier 的 Go 原生主机执行代理。该仓库目前处于 **T01-04 一次性配对与持久授权完成阶段**，首期目标为 Linux / FnOS 上的 Docker / Docker Compose 管理。
 
-> **注意：当前版本仅为可启动/可退出的程序骨架，不提供 HTTP/HTTPS 接口，也不能配对、查询 Docker 或安装应用。请勿将其当作可以实际部署使用的 Agent。**
+> **注意：当前版本已实现 TLS 身份发现、一次性本地配对码和控制端 Token 授权，但 EasyTier 页面配对尚未集成，不提供 Docker 或应用安装 API。不能当成完整可用的管理 Agent。**
 
 ## 工程结构
 
 ```text
-cmd/easyhostagent/       CLI 入口（-version、-check-config、-identity、信号退出）
+cmd/easyhostagent/       CLI 入口（-version、-check-config、-identity、-pairing-code）
 internal/app/            TLS 1.3 服务生命周期与优雅退出
 internal/config/         软件根目录、状态目录、日志等级
 internal/logging/        标准库 log/slog JSON 结构化日志
 internal/buildinfo/      构建版本元数据
 internal/identity/       私有身份状态文件、Agent UUID、TLS 证书与指纹
-internal/httpapi/        HTTPS health / identity API
-internal/auth/           默认拒绝的 Bearer 鉴权中间件（配对待实现）
+internal/httpapi/        HTTPS health / identity / pairings API
+internal/auth/           Bearer + Controller/Agent ID 鉴权中间件
+internal/pairing/        一次性配对窗口与持久授权仓库
 docs/                    架构与协议文档
 tests/contracts/         M0 契约测试和 Docker 示例
 ```
@@ -111,7 +112,26 @@ HTTPS API v1 暂时仅实现以下两个无需 Token 的发现接口：
 
 HTTPS 默认监听 `0.0.0.0:7014`，可在初次安装或编辑 `/etc/easyhostagent/agent.env` 添加 `EASYHOSTAGENT_LISTEN_ADDRESS=127.0.0.1:7014` 限制为本机。由于默认允许本地网络连接，请用路由器/宿主机防火墙仅放行可信 EasyTier 控制端；无需将 7014 映射到公网。
 
-**目前没有开放任何配对、安装、脚本、Docker 管理或其它有副作用的远程操作接口。** 受保护路由的 Bearer 与控制端/Agent 身份检查中间件已建立，但在下一任务 T01-04 持久化实际的配对授权之前，默认拒绝所有未授权调用。
+**T01-04 新增 HTTPS 配对及授权撤销，但仍不开放 Docker、脚本或应用安装操作。**
+
+在宿主机本地受信任终端执行：
+
+```bash
+sudo /usr/local/bin/easyhostagent -pairing-code
+```
+
+程序显示 Agent UUID、公钥指纹、一次性配对码及 UTC 到期时间。配对码由安全随机数生成（128 bit），有效期 10 分钟，错误尝试最多 5 次，成功后不可再次使用。**配对前必须在可信终端核对 TLS SPKI 指纹，不要跳过证书验证**；EasyTier Rust 的固定指纹配对接入归 T01-06。
+
+HTTP 配对契约：
+
+| 方法 | 路径 | 权限 |
+|---|---|---|
+| POST | `/v1/pairings` | TLS + 一次性码，返回只显示一次的 Bearer Token |
+| DELETE | `/v1/pairings/current` | Bearer Token + Controller ID + Agent ID，成功后撤销授权 |
+
+本地 `/var/lib/easyhostagent/pairing.json` 保存控制端绑定 ID、错误次数和**配对码/Token 的 SHA-256 摘要，不保存明文**，以 0600 权限保护。重新配对前旧授权继续生效，成功后旧 Token 立即失效。系统安装器卸载/重装时保留该目录；身份状态损坏会拒绝启动而不是自动重置。
+
+[配对实现与验收报告](docs/T01-04-pairing.md) · [Go race 与双架构 CI](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)
 
 ## 配置（环境变量）
 
@@ -124,14 +144,15 @@ HTTPS 默认监听 `0.0.0.0:7014`，可在初次安装或编辑 `/etc/easyhostag
 
 FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-release` 进行保守的识别；用户可使用 `EASYHOSTAGENT_SOFTWARE_ROOT` 明确覆盖。后续 T01-07 负责完善 FnOS 兼容与 UI 可配置路径，以及存在受管应用时禁止直接迁移目录的业务规则。
 
-配置校验仅读取参数，不会创建目录、修改文件或运行 Docker。身份命令会在首次调用时写入本地受保护的身份状态。日志使用 JSON Lines，标准输出可由 systemd/journald 收集；目前仅开放 HTTPS 身份发现接口。
+配置校验仅读取参数，不会创建目录、修改文件或运行 Docker。身份命令首次调用时会写入本地受保护的状态；配对码仅经本地 CLI 显示。日志使用 JSON Lines，标准输出由 systemd/journald 收集。
 
 ## 任务路线
 
 - **T01-01**：Go 工程骨架、配置、日志、构建与单元测试。
 - **T01-02（完成）**：FnOS/Linux 安装脚本和 systemd unit（实机验收仍需目标机器）。
 - **T01-03（已完成）**：持久 Agent 身份、TLS 1.3 HTTPS 身份发现及默认拒绝的授权中间件；[测试与双架构 CI 通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40427223740)。
-- **T01-04**：一次性配对码。
+- **T01-04（完成）**：一次性配对码、持久控制端授权与撤销；[CI 已通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)。
+- **T01-05 / T01-06**：EasyTier 服务器设备入口与 Rust 端绑定集成。
 - **T02**：Docker 基础管理。
 - **T03/T04**：中央 Deploy 部署包、应用管理任务。
 
