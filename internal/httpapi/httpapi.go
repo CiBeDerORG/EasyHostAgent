@@ -1,18 +1,23 @@
-// Package httpapi exposes only the two unauthenticated discovery routes in
-// T01-03. Pairing and all privileged endpoints are added in later tasks.
+// Package httpapi exposes the Agent discovery and one-time pairing endpoints.
+// No Docker or task execution routes are available in T01-04.
 package httpapi
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
+	"mime"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
-func NewHandler(state identity.State, platform, version string) http.Handler {
+func NewHandler(state identity.State, platform, version string, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -36,6 +41,71 @@ func NewHandler(state identity.State, platform, version string) http.Handler {
 			"observed_at":     time.Now().UTC().Format(time.RFC3339),
 		})
 	})
+	// A nil store is allowed for T01-03 legacy discovery tests only.
+	// Production must pass a persistent store.
+	if len(stores) != 0 && stores[0] != nil {
+		store := stores[0]
+		mux.HandleFunc("/v1/pairings", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				w.Header().Set("Allow", "POST")
+				sendError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+				return
+			}
+			contentType, _, e := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if e != nil || contentType != "application/json" {
+				sendError(w, http.StatusBadRequest, "invalid_content_type", "JSON body required")
+				return
+			}
+			var request struct {
+				ControllerID string `json:"controller_id"`
+				DeviceID     string `json:"device_id"`
+				Code         string `json:"pairing_code"`
+			}
+			decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+			decoder.DisallowUnknownFields()
+			if e := decoder.Decode(&request); e != nil {
+				sendError(w, http.StatusBadRequest, "invalid_request", "Invalid pairing request")
+				return
+			}
+			var extra any
+			if e := decoder.Decode(&extra); !errors.Is(e, io.EOF) {
+				sendError(w, http.StatusBadRequest, "invalid_request", "Expected one JSON object")
+				return
+			}
+			result, e := store.Exchange(request.ControllerID, request.DeviceID, request.Code)
+			if e != nil {
+				switch {
+				case errors.Is(e, pairing.ErrRateLimited):
+					sendError(w, http.StatusTooManyRequests, "pairing_attempts_exhausted", "Generate a new code on the host")
+				case errors.Is(e, pairing.ErrInvalidCode):
+					sendError(w, http.StatusUnauthorized, "invalid_pairing_code", "Pairing code not accepted")
+				case errors.Is(e, pairing.ErrNoCode), errors.Is(e, pairing.ErrExpired):
+					sendError(w, http.StatusForbidden, "pairing_window_closed", "Open a new local pairing window")
+				default:
+					// Do not leak filesystem paths or stored state details.
+					sendError(w, http.StatusServiceUnavailable, "pairing_unavailable", "Pairing unavailable")
+				}
+				return
+			}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(result)
+		})
+		mux.Handle("/v1/pairings/current", auth.RequireController(state.AgentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodDelete {
+				w.Header().Set("Allow", "DELETE")
+				sendError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+				return
+			}
+			token := r.Header.Get("Authorization")
+			token = token[len("Bearer "):] // RequireController validates prefix first.
+			if e := store.Revoke(r.Header.Get("X-EHA-Controller-ID"), state.AgentID, token); e != nil {
+				sendError(w, http.StatusServiceUnavailable, "revoke_failed", "Revocation could not be confirmed")
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})))
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-EHA-Agent-ID", state.AgentID)
 		w.Header().Set("Cache-Control", "no-store")
