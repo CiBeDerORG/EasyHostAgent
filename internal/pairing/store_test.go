@@ -223,7 +223,7 @@ func TestSymlinkStateRefused(t *testing.T) {
 	if err := os.Symlink(other, filepath.Join(dir, fileName)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Generate(); err == nil {
+	if _, _, err := s.Generate(); err == nil {
 		t.Fatal("symlink accepted")
 	}
 }
