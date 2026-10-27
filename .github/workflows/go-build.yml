@@ -1,4 +1,4 @@
-name: Go Agent Foundation
+name: Go Agent Foundation and HTTPS Identity
 
 on:
   push:
