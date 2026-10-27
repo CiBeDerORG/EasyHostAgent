@@ -53,3 +53,25 @@ func TestBadFlagsAndConfig(t *testing.T) {
 		t.Fatalf("expected config error, got %d", code)
 	}
 }
+
+func TestGenerateLocalPairingCodeDoesNotPrintBearer(t *testing.T) {
+	t.Setenv("EASYHOSTAGENT_DATA_DIR", filepath.Join(t.TempDir(), "private"))
+	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/opt/software")
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"-pairing-code"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("failed to generate pairing code: %d %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "TLS SPKI SHA-256:") ||
+		!strings.Contains(stdout.String(), "One-time pairing code:") ||
+		!strings.Contains(stdout.String(), "Expires (UTC):") {
+		t.Fatalf("missing pairing information: %s", stdout.String())
+	}
+	if strings.Contains(strings.ToLower(stdout.String()), "bearer") {
+		t.Fatal("unexpected bearer in local code output")
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := run([]string{"-pairing-code", "-identity"}, &stdout, &stderr); code != 2 {
+		t.Fatalf("conflicting options must be rejected: %d", code)
+	}
+}
