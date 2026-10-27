@@ -130,7 +130,7 @@ FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-rele
 
 - **T01-01**：Go 工程骨架、配置、日志、构建与单元测试。
 - **T01-02（完成）**：FnOS/Linux 安装脚本和 systemd unit（实机验收仍需目标机器）。
-- **T01-03（已实现，待 CI 最终验证）**：持久 Agent 身份、TLS 1.3 HTTPS 身份发现及默认拒绝的授权中间件。
+- **T01-03（已完成）**：持久 Agent 身份、TLS 1.3 HTTPS 身份发现及默认拒绝的授权中间件；[测试与双架构 CI 通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40427223740)。
 - **T01-04**：一次性配对码。
 - **T02**：Docker 基础管理。
 - **T03/T04**：中央 Deploy 部署包、应用管理任务。
