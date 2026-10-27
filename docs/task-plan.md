@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 的 5 项设计与测试样本交付已完成，后续 45 项未开始；Deploy 合约 CI 尚未真正执行，需持续跟踪**。
+> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01 已完成，累计 6/50；后续 44 项未开始；Deploy 合约 CI 尚未真正执行，需持续跟踪**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -34,7 +34,7 @@
 
 | 任务 | 仓库/负责人 | 前置 | 交付与验收 |
 |---|---|---|---|
-| T01-01 Go 工程初始化 | EHA · Go | T00-02 | 建立 `cmd/`、`internal/`、配置与结构化日志，编译 amd64/arm64；不启动心跳任务。 |
+| **T01-01 [DONE]** Go 工程初始化 | EHA · Go | T00-02 | 已实现 `cmd/`、`internal/`、配置、JSON 日志、优雅退出、单元测试；[Go 双架构 CI 全绿](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40423379295)；[实现及验收报告](./T01-01-go-foundation.md)。无心跳、无 HTTP/Docker。 |
 | T01-02 Linux/FnOS 安装器 | EHA · Go/运维 | T01-01 | 一条可复制安装命令，安装 Go 程序与 systemd 单元，开机启动，保留持久配置和身份。 |
 | T01-03 设备身份与 HTTPS API | EHA · Go | T01-01 | `agent_id` 持久稳定，身份/health API，HTTPS 证书信任/鉴权基础；非授权者不得执行高权限动作。 |
 | T01-04 一次性配对 | EHA · Go | T01-03 | 本地生成/展示配对码、一次性消费、保存授权、解绑后新码重配；旧凭证失效。 |
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05 [DONE]**（M0 契约/样本均已提交），余下 **45 项 [TODO]**。**CI 遗留阻塞：Deploy workflow 无步骤失败，恢复 Runner 后必须补测**。下一项是 **T01-01：Go Agent 项目初始化**。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05、T01-01 [DONE]**（M0 五项 + Go Agent 基础），余下 **44 项 [TODO]**。**CI 遗留阻塞：Deploy workflow 无步骤失败，恢复 Runner 后必须补测**。下一项是 **T01-02：FnOS/Linux systemd 安装器**。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
