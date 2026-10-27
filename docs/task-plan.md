@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-03 已完成，累计 8/50；后续 42 项未开始；Deploy 合约 CI 仍需恢复，FnOS 实机验收待后续执行**。
+> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-04 已完成，累计 9/50；后续 41 项未开始；Deploy 合约 CI 仍需恢复，FnOS 实机及 Rust 指纹配对集成待后续执行**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -37,7 +37,7 @@
 | **T01-01 [DONE]** Go 工程初始化 | EHA · Go | T00-02 | 已实现 `cmd/`、`internal/`、配置、JSON 日志、优雅退出、单元测试；[Go 双架构 CI 全绿](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40423379295)；[实现及验收报告](./T01-01-go-foundation.md)。无心跳、无 HTTP/Docker。 |
 | **T01-02 [DONE，FnOS 实机待验收]** Linux/FnOS 安装器 | EHA · Go/运维 | T01-01 | 已提交 [原生安装器](../scripts/install.sh)、[数据保留卸载器](../scripts/uninstall.sh)、[systemd unit](../packaging/systemd/easyhostagent.service) 及 11 项隔离安装测试；[GitHub Actions 全绿](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40424901906)；[完整实现记录](./T01-02-native-installer.md)。暂未发布正式 Release，也未在真实 FnOS 执行 systemd 安装。 |
 | **T01-03 [DONE]** 设备身份与 HTTPS API | EHA · Go | T01-01 | 已实现稳定 Agent UUID、0700/0600 私钥状态、TLS 1.3 自签名证书与 SPKI SHA-256、本地 `-identity`、只读 `/v1/health` 和 `/v1/identity`、默认拒绝的鉴权中间件；[Go race 测试及双架构构建全绿](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40427223740)；[实施报告](./T01-03-https-identity.md)。配对与持久授权为 T01-04。 |
-| T01-04 一次性配对 | EHA · Go | T01-03 | 本地生成/展示配对码、一次性消费、保存授权、解绑后新码重配；旧凭证失效。 |
+| **T01-04 [DONE]** 一次性配对 | EHA · Go | T01-03 | 已实现本地随机一次性码（10 分钟/5 次限制）、HTTPS 配对、Bearer Token 哈希持久化、重配旧 Token 失效和已鉴权解绑；[race 测试及双架构 CI 通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)；[实施与验收报告](./T01-04-pairing.md)。EasyTier Rust 的证书指纹绑定、页面联调归 T01-06。 |
 | T01-05 易用的服务器设备入口 | ET · Vue/Rust | T00-01/04 | 语义 `server` 的既有设备显示 Agent 接入引导，不创建第二台主机，不支持设备转移。 |
 | T01-06 基于设备 IP 按需发现与绑定 | ET · Rust | T01-03/04/05 | 点击检测探测 Agent，输入配对码绑定；IP 改变后按需验证唯一身份并重定位；不靠心跳。 |
 | T01-07 按需主机状态和安装目录 | EHA+ET · Go/Rust | T01-06 | 系统、架构、CPU、内存、磁盘、Docker 可用性按需返回；`SOFTWARE_ROOT` 系统默认、可配置，已有应用时禁止直接变更。 |
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05、T01-01～T01-03 [DONE]**（M0 五项 + Go Agent 三项），余下 **42 项 [TODO]**。**CI 遗留阻塞：Deploy workflow 无步骤失败，恢复 Runner 后必须补测**。下一项是 **T01-04：一次性配对码与持久授权**；真实 FnOS systemd 安装留 T01-08。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05、T01-01～T01-04 [DONE]**（M0 五项 + Go Agent 四项），余下 **41 项 [TODO]**。**CI 遗留阻塞：Deploy workflow 无步骤失败，恢复 Runner 后必须补测**。下一项是 **T01-05：EasyTier 服务器设备的 Agent 接入入口**；真实 FnOS systemd 安装与 Rust 端 HTTPS 配对联调留 T01-06/T01-08。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
