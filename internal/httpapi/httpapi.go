@@ -96,9 +96,9 @@ func NewHandler(state identity.State, platform, version string, stores ...*pairi
 		mux.Handle("/v1/pairings/current", auth.RequireController(state.AgentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet {
 				sendJSON(w, map[string]any{
-					"agent_id": state.AgentID,
+					"agent_id":      state.AgentID,
 					"controller_id": r.Header.Get("X-EHA-Controller-ID"),
-					"authorized": true,
+					"authorized":    true,
 				})
 				return
 			}

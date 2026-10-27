@@ -146,32 +146,50 @@ func TestRateLimitAndJSONGuard(t *testing.T) {
 func TestPairedControllerReadOnlyAuthorizationCheck(t *testing.T) {
 	server, store, state := startPairedServer(t)
 	code, _, err := store.Generate()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	body := `{"controller_id":"` + controllerA + `","device_id":"` + deviceA + `","pairing_code":"` + code + `"}`
 	resp, data := postPair(t, server, body, "application/json")
-	if resp.StatusCode != http.StatusCreated { t.Fatalf("pairing failed: %v", data) }
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("pairing failed: %v", data)
+	}
 	token := data["access_token"].(string)
 	check := func(controller, bearer string) (int, map[string]any) {
 		t.Helper()
 		req, err := http.NewRequest(http.MethodGet, server.URL+"/v1/pairings/current", nil)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		req.Header.Set("X-EHA-Controller-ID", controller)
 		req.Header.Set("X-EHA-Agent-ID", state.AgentID)
 		req.Header.Set("Authorization", "Bearer "+bearer)
 		res, err := server.Client().Do(req)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		defer res.Body.Close()
 		var response map[string]any
-		if err := json.NewDecoder(res.Body).Decode(&response); err != nil { t.Fatal(err) }
+		if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+			t.Fatal(err)
+		}
 		return res.StatusCode, response
 	}
-	if status, data := check(controllerA,token); status != 200 ||
+	if status, data := check(controllerA, token); status != 200 ||
 		data["authorized"] != true || data["agent_id"] != state.AgentID ||
 		data["controller_id"] != controllerA {
 		t.Fatalf("valid controller check failed: %d %v", status, data)
 	}
-	if status,_:=check(controllerB,token);status!=401 {t.Fatalf("wrong controller: %d",status)}
-	if status,_:=check(controllerA,strings.Repeat("0",64));status!=401 {t.Fatalf("wrong token: %d",status)}
-	if err:=store.Revoke(controllerA,state.AgentID,token);err!=nil {t.Fatal(err)}
-	if status,_:=check(controllerA,token);status!=401 {t.Fatalf("revoked token accepted: %d",status)}
+	if status, _ := check(controllerB, token); status != 401 {
+		t.Fatalf("wrong controller: %d", status)
+	}
+	if status, _ := check(controllerA, strings.Repeat("0", 64)); status != 401 {
+		t.Fatalf("wrong token: %d", status)
+	}
+	if err := store.Revoke(controllerA, state.AgentID, token); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := check(controllerA, token); status != 401 {
+		t.Fatalf("revoked token accepted: %d", status)
+	}
 }
