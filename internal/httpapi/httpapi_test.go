@@ -4,13 +4,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 )
 
 func TestHTTPSIdentityAndHealth(t *testing.T) {
-	state, err := identity.LoadOrCreate(t.TempDir())
+	state, err := identity.LoadOrCreate(filepath.Join(t.TempDir(), "state"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +58,7 @@ func TestHTTPSIdentityAndHealth(t *testing.T) {
 	}
 }
 func TestEndpointMethodsAndPlainHTTPRejected(t *testing.T) {
-	state, err := identity.LoadOrCreate(t.TempDir())
+	state, err := identity.LoadOrCreate(filepath.Join(t.TempDir(), "state"))
 	if err != nil {
 		t.Fatal(err)
 	}
