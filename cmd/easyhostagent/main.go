@@ -28,8 +28,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	showVersion := flags.Bool("version", false, "print build version")
 	checkConfig := flags.Bool("check-config", false, "validate configuration and exit")
-	showIdentity := flags.Bool("identity",false,"show stable Agent ID and TLS public key fingerprint locally")
-	if err := flags.Parse(args); err != nil {return 2}
+	showIdentity := flags.Bool("identity", false, "show stable Agent ID and TLS public key fingerprint locally")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
 	if flags.NArg() != 0 {
 		fmt.Fprintln(stderr, "unexpected arguments:", flags.Args())
 		return 2
@@ -46,13 +48,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if *checkConfig {
 		fmt.Fprintf(stdout, "configuration valid: data_dir=%s software_root=%s listen=%s log_level=%s\n",
-			cfg.DataDir, cfg.SoftwareRoot,cfg.ListenAddr,cfg.LogLevel)
+			cfg.DataDir, cfg.SoftwareRoot, cfg.ListenAddr, cfg.LogLevel)
 		return 0
 	}
 	if *showIdentity {
-		state,err:=identity.LoadOrCreate(cfg.DataDir)
-		if err!=nil {fmt.Fprintln(stderr,"identity error:",err);return 1}
-		fmt.Fprintf(stdout,"Agent ID: %s\nTLS SPKI SHA-256: %s\n",state.AgentID,state.SPKISHA256)
+		state, err := identity.LoadOrCreate(cfg.DataDir)
+		if err != nil {
+			fmt.Fprintln(stderr, "identity error:", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Agent ID: %s\nTLS SPKI SHA-256: %s\n", state.AgentID, state.SPKISHA256)
 		return 0
 	}
 

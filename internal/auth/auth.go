@@ -16,7 +16,8 @@ type Verifier interface {
 	Authorized(controllerID, agentID, token string) bool
 }
 type VerifyFunc func(controllerID, agentID, token string) bool
-func (fn VerifyFunc) Authorized(c, a, token string) bool { return fn(c,a,token) }
+
+func (fn VerifyFunc) Authorized(c, a, token string) bool { return fn(c, a, token) }
 
 // EqualToken avoids timing leaks even when token lengths differ.
 func EqualToken(actual, expected string) bool {
@@ -29,29 +30,29 @@ func EqualToken(actual, expected string) bool {
 // verifier (until T01-04), no request can get privileged access.
 func RequireController(agentID string, verifier Verifier, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control","no-store")
+		w.Header().Set("Cache-Control", "no-store")
 		if r.TLS == nil {
-			writeDenied(w,http.StatusBadRequest,"tls_required")
+			writeDenied(w, http.StatusBadRequest, "tls_required")
 			return
 		}
 		ctrl := r.Header.Get("X-EHA-Controller-ID")
 		claimed := r.Header.Get("X-EHA-Agent-ID")
-		if ctrl == "" || claimed != agentID || !strings.HasPrefix(r.Header.Get("Authorization"),"Bearer ") {
-			writeDenied(w,http.StatusUnauthorized,"unauthorized")
+		if ctrl == "" || claimed != agentID || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+			writeDenied(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		token := strings.TrimPrefix(r.Header.Get("Authorization"),"Bearer ")
-		if len(token) < 32 || strings.TrimSpace(token) != token || verifier == nil || !verifier.Authorized(ctrl,agentID,token) {
-			writeDenied(w,http.StatusUnauthorized,"unauthorized")
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if len(token) < 32 || strings.TrimSpace(token) != token || verifier == nil || !verifier.Authorized(ctrl, agentID, token) {
+			writeDenied(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		next.ServeHTTP(w,r)
+		next.ServeHTTP(w, r)
 	})
 }
-func writeDenied(w http.ResponseWriter,status int, code string) {
-	w.Header().Set("Content-Type","application/json; charset=utf-8")
+func writeDenied(w http.ResponseWriter, status int, code string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"code":code,"message":"Request not authorized","retryable":false,
+		"code": code, "message": "Request not authorized", "retryable": false,
 	})
 }
