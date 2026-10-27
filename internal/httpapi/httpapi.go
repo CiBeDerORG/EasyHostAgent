@@ -94,8 +94,16 @@ func NewHandler(state identity.State, platform, version string, stores ...*pairi
 			_ = json.NewEncoder(w).Encode(result)
 		})
 		mux.Handle("/v1/pairings/current", auth.RequireController(state.AgentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				sendJSON(w, map[string]any{
+					"agent_id": state.AgentID,
+					"controller_id": r.Header.Get("X-EHA-Controller-ID"),
+					"authorized": true,
+				})
+				return
+			}
 			if r.Method != http.MethodDelete {
-				w.Header().Set("Allow", "DELETE")
+				w.Header().Set("Allow", "GET, DELETE")
 				sendError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 				return
 			}
