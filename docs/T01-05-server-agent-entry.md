@@ -3,7 +3,7 @@
 > 日期：2026-10-27
 > 实现分支：`CiBeDerORG/EasyTier` / `feat/automation-center`
 > 代码提交：[8e67f1f9](https://github.com/CiBeDerORG/EasyTier/commit/8e67f1f9e67c8413afe920b083e05074f7ff5666)
-> 状态：**入口功能与测试已提交；前端 Node 22 单元测试已通过，完整 Rust/Vue 构建待 GitHub 主镜像 CI 完成**。
+> 状态：**DONE（入口实现、Vue/Web 构建与 Node 单测通过，Rust 测试目标编译及原有回归测试通过；新增 REST 运行时用例尚未单独执行，完整 GHCR 打包仍在运行）**。
 > 本任务不执行 Agent 配对、不修改设备或服务记录、不额外创建主机。
 
 ## 一、开发实现
