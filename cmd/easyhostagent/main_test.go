@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestVersionExitsWithoutLaunchingService(t *testing.T) {
 	}
 }
 func TestCheckConfig(t *testing.T) {
-	t.Setenv("EASYHOSTAGENT_DATA_DIR", t.TempDir())
+	t.Setenv("EASYHOSTAGENT_DATA_DIR", filepath.Join(t.TempDir(), "state"))
 	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/tmp/agent-test-apps")
 	var out, errors bytes.Buffer
 	if code := run([]string{"-check-config"}, &out, &errors); code != 0 {
