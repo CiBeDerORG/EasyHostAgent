@@ -1,0 +1,26 @@
+[Unit]
+Description=EasyHostAgent (EasyTier host management agent)
+Documentation=https://github.com/CiBeDerORG/EasyHostAgent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/easyhostagent
+EnvironmentFile=-/etc/easyhostagent/agent.env
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0077
+LimitNOFILE=65536
+NoNewPrivileges=true
+
+# Intentionally no ProtectSystem=strict or ProtectHome=true yet:
+# the future Docker/Compose adapter must write to configurable SOFTWARE_ROOT.
+# T01-03 will add HTTPS auth; T01-02 binary currently opens no network ports.
+
+[Install]
+WantedBy=multi-user.target
