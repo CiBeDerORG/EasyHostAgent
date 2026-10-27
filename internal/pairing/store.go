@@ -29,6 +29,7 @@ var (
 	ErrInvalidCode = errors.New("invalid pairing code")
 	ErrRateLimited = errors.New("pairing attempts exhausted; generate a new code locally")
 	ErrUnauthorized = errors.New("controller authorization failed")
+	ErrInvalidIDs = errors.New("invalid controller or device ID")
 	uuidPattern    = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	codePattern    = regexp.MustCompile(`^[0-9a-f]{32}$`)
 )
