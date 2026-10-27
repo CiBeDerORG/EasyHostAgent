@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 

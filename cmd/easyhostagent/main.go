@@ -16,8 +16,8 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
-	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
 func main() {
