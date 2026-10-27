@@ -63,7 +63,9 @@ func TestCorruptIdentityNeverRegenerated(t *testing.T) {
 
 func TestIdentityCannotBeSymlink(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "state")
-	if err := os.Mkdir(dir, 0700); err != nil { t.Fatal(err) }
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	target := filepath.Join(t.TempDir(), "outside")
 	if err := os.WriteFile(target, []byte("private"), 0600); err != nil {
 		t.Fatal(err)
