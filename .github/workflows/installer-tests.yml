@@ -1,0 +1,35 @@
+name: FnOS Linux Installer Tests
+
+on:
+  push:
+    paths:
+      - "scripts/**"
+      - "packaging/**"
+      - "tests/installer/**"
+      - ".github/workflows/installer-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    name: Native installer integration (staging root)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Validate bash syntax
+        run: |
+          bash -n scripts/install.sh
+          bash -n scripts/uninstall.sh
+      - name: Compile real candidate Go binary
+        run: go build -trimpath -o "$RUNNER_TEMP/easyhostagent" ./cmd/easyhostagent
+      - name: Test staging install, uninstall, offline and checksummed release paths
+        run: |
+          EHA_TEST_REAL_BINARY="$RUNNER_TEMP/easyhostagent" \
+            python3 -m unittest discover -s tests/installer -p 'test_*.py' -v
