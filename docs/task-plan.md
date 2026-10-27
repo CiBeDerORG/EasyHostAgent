@@ -38,7 +38,7 @@
 | **T01-02 [DONE，FnOS 实机待验收]** Linux/FnOS 安装器 | EHA · Go/运维 | T01-01 | 已提交 [原生安装器](../scripts/install.sh)、[数据保留卸载器](../scripts/uninstall.sh)、[systemd unit](../packaging/systemd/easyhostagent.service) 及 11 项隔离安装测试；[GitHub Actions 全绿](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40424901906)；[完整实现记录](./T01-02-native-installer.md)。暂未发布正式 Release，也未在真实 FnOS 执行 systemd 安装。 |
 | **T01-03 [DONE]** 设备身份与 HTTPS API | EHA · Go | T01-01 | 已实现稳定 Agent UUID、0700/0600 私钥状态、TLS 1.3 自签名证书与 SPKI SHA-256、本地 `-identity`、只读 `/v1/health` 和 `/v1/identity`、默认拒绝的鉴权中间件；[Go race 测试及双架构构建全绿](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40427223740)；[实施报告](./T01-03-https-identity.md)。配对与持久授权为 T01-04。 |
 | **T01-04 [DONE]** 一次性配对 | EHA · Go | T01-03 | 已实现本地随机一次性码（10 分钟/5 次限制）、HTTPS 配对、Bearer Token 哈希持久化、重配旧 Token 失效和已鉴权解绑；[race 测试及双架构 CI 通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)；[实施与验收报告](./T01-04-pairing.md)。EasyTier Rust 的证书指纹绑定、页面联调归 T01-06。 |
-| T01-05 易用的服务器设备入口 | ET · Vue/Rust | T00-01/04 | 语义 `server` 的既有设备显示 Agent 接入引导，不创建第二台主机，不支持设备转移。 |
+| **T01-05 [IN_PROGRESS，等待 Rust/Vue CI]** 易用的服务器设备入口 | ET · Vue/Rust | T00-01/04 | 已实现服务器设备行 Agent 按钮、只读且按 owner/node/device 鉴权的 `/agent-entry`、安装引导及异步上下文保护；[Node 单元测试已通过](https://github.com/CiBeDerORG/EasyTier/actions/runs/40430588698)，[源码与剩余验收](./T01-05-server-agent-entry.md)。完整镜像构建和 Rust 路由测试仍需结果，不提前宣称全绿。 |
 | T01-06 基于设备 IP 按需发现与绑定 | ET · Rust | T01-03/04/05 | 点击检测探测 Agent，输入配对码绑定；IP 改变后按需验证唯一身份并重定位；不靠心跳。 |
 | T01-07 按需主机状态和安装目录 | EHA+ET · Go/Rust | T01-06 | 系统、架构、CPU、内存、磁盘、Docker 可用性按需返回；`SOFTWARE_ROOT` 系统默认、可配置，已有应用时禁止直接变更。 |
 | T01-08 主机接入端到端验收 | ET+EHA · 测试 | T01-01~07 | FnOS 完成安装、发现、配对、查询、离线缓存、解绑后重新配对；无心跳/后台定时查询。 |
