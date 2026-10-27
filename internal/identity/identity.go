@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -190,6 +191,7 @@ func generate() ([]byte, error) {
 		BasicConstraintsValid: true,
 		IsCA:                  true, // self-signed trust anchor for explicit pinning; never a public CA
 		DNSNames:              []string{"localhost", host},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
 	}
 	certDER, err := x509.CreateCertificate(rand.Reader, &cert, &cert, &key.PublicKey, key)
 	if err != nil {
