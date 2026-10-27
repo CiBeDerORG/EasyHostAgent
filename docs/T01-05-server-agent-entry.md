@@ -57,7 +57,10 @@ Cookie: <existing authenticated EasyTier session>
 - [x] Node 22 的服务器候选判断、owner/node/device 匹配测试已执行成功：[Run 40430588698](https://github.com/CiBeDerORG/EasyTier/actions/runs/40430588698)。
 - [x] Rust 单元判断 `server_agent_eligible` 已写入代码（仅明确多语义 server）。
 - [x] Rust 实际路由集成测试已写入代码，但**尚未获得此新测试的 CI 运行结果**。
-- [ ] Vue `vue-tsc` 与完整 Rust / GHCR 构建验收：以对应最新主镜像 CI 结果为准（[CI 入口](https://github.com/CiBeDerORG/EasyTier/actions)）。
+- [x] Web 前端构建与既有单元测试均成功：[CI #40430588552](https://github.com/CiBeDerORG/EasyTier/actions/runs/40430588552) 中 Build Web and config generator 为 success。
+- [x] Rust 原生回归任务 success（publication / LuCI），新增 REST 测试已经编译进入 test binary。
+- [ ] 新增 `server_agent_entry_reuses_asset_and_enforces_scope_without_remote_probe` 未被当前原生回归脚本的测试过滤条件选中，**不能声称它已运行通过**；后续应纳入专项回归。
+- [ ] 完整 GHCR 镜像打包仍在运行，打包结果不在本项入口/权限代码验收内。
 - [ ] FnOS / Linux 真实设备 HTTPS 探测、证书固定指纹、一次性配对以及绑定后主机状态均是 T01-06/T01-08，不属于 T01-05。
 - [ ] 解绑时归档保护、保留服务和历史任务对应后续数据库迁移与删除生命周期任务，本项尚不改变现有删除逻辑。
 
