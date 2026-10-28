@@ -146,3 +146,17 @@ func TestInspectGroupedOverEngineSocket(t *testing.T) {
 		t.Fatalf("missing engine produced authoritative data: %+v, %v", invalid, err)
 	}
 }
+
+
+func TestGroupSameImageWithoutProjectLabelRemainsIndependent(t *testing.T) {
+	a := makeContainer("standalone-a", "redis", "running", "", "db")
+	b := makeContainer("standalone-b", "redis", "exited", "", "db")
+	a.Image, b.Image = "redis:7", "redis:7"
+	got, err := Group(Inventory{Complete: true, Containers: []Container{a, b}})
+	if err != nil || !got.Complete || len(got.Resources) != 2 {
+		t.Fatalf("identical image/name must not merge independent containers: %+v, %v", got, err)
+	}
+	if got.Resources[0].ID != "container:standalone-a" || got.Resources[1].ID != "container:standalone-b" {
+		t.Fatalf("standalone IDs must remain tied to Docker container identity: %+v", got.Resources)
+	}
+}
