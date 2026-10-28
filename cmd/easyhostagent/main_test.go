@@ -29,16 +29,20 @@ func TestCheckConfig(t *testing.T) {
 	}
 }
 func TestCheckConfigShowsSavedSoftwareRoot(t *testing.T) {
-    dataDir := filepath.Join(t.TempDir(), "state")
-    if err := os.MkdirAll(dataDir, 0700); err != nil { t.Fatal(err) }
-    t.Setenv("EASYHOSTAGENT_DATA_DIR", dataDir)
-    t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/opt/software")
-    if err := os.WriteFile(filepath.Join(dataDir, "host-settings.json"), []byte(`{"software_root":"/tmp/persisted-apps"}`), 0600); err != nil { t.Fatal(err) }
-    var out, errors bytes.Buffer
-    if code := run([]string{"-check-config"}, &out, &errors); code != 0 ||
-        !strings.Contains(out.String(), "software_root=/tmp/persisted-apps") {
-        t.Fatalf("code=%d out=%q stderr=%q", code, out.String(), errors.String())
-    }
+	dataDir := filepath.Join(t.TempDir(), "state")
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EASYHOSTAGENT_DATA_DIR", dataDir)
+	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/opt/software")
+	if err := os.WriteFile(filepath.Join(dataDir, "host-settings.json"), []byte(`{"software_root":"/tmp/persisted-apps"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errors bytes.Buffer
+	if code := run([]string{"-check-config"}, &out, &errors); code != 0 ||
+		!strings.Contains(out.String(), "software_root=/tmp/persisted-apps") {
+		t.Fatalf("code=%d out=%q stderr=%q", code, out.String(), errors.String())
+	}
 }
 func TestLocalIdentityCommandIsStable(t *testing.T) {
 	t.Setenv("EASYHOSTAGENT_DATA_DIR", filepath.Join(t.TempDir(), "state"))
