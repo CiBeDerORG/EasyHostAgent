@@ -1,7 +1,10 @@
 package dockerengine
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -102,5 +105,42 @@ func TestGroupEmptyAndStatuses(t *testing.T) {
 		if err != nil || len(got.Resources) != 1 || got.Resources[0].Status != tc.want {
 			t.Fatalf("states %v status %+v, %v", tc.states, got.Resources, err)
 		}
+	}
+}
+
+func TestInspectGroupedOverEngineSocket(t *testing.T) {
+	socket := testEngine(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.String() {
+		case "/version":
+			_, _ = w.Write([]byte(`{"Version":"28.0","ApiVersion":"1.48","MinAPIVersion":"1.41"}`))
+		case "/v1.41/containers/json?all=1":
+			_, _ = w.Write([]byte(`[
+				{"Id":"web","Names":["/web"],"State":"running","Labels":{"com.docker.compose.project":"sub2api","com.docker.compose.service":"api"}},
+				{"Id":"db","Names":["/db"],"State":"exited","Labels":{"com.docker.compose.project":"sub2api","com.docker.compose.service":"postgres"}}
+			]`))
+		case "/v1.41/images/json?all=1":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	client, err := New(socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	grouped, err := client.InspectGrouped(context.Background())
+	if err != nil || !grouped.Complete || len(grouped.Resources) != 1 ||
+		grouped.Resources[0].ID != "compose:sub2api" || grouped.Resources[0].Status != "partial" {
+		t.Fatalf("invalid Engine-to-Compose integration: %+v, %v", grouped, err)
+	}
+
+	missing, err := New(filepath.Join(t.TempDir(), "missing.sock"))
+	if err != nil { t.Fatal(err) }
+	defer missing.Close()
+	invalid, err := missing.InspectGrouped(context.Background())
+	if !errors.Is(err, ErrIncomplete) || !errors.Is(err, ErrUnavailable) || invalid.Complete || len(invalid.Resources) != 0 {
+		t.Fatalf("missing engine produced authoritative data: %+v, %v", invalid, err)
 	}
 }
