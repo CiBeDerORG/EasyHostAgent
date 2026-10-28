@@ -1,7 +1,7 @@
 # T01-07 — 按需主机状态及 SOFTWARE_ROOT
 
 > 2026-10-28。目标仓库：EasyHostAgent main、EasyTier feat/automation-center。
-> 当前状态：**IN_PROGRESS**（Go Agent CI 已通过；EasyTier Rust / Vue 主构建及真实 FnOS 联调待验收）。
+> 当前状态：**DONE：代码及双仓库 CI 通过**（FnOS 实机端到端测试属于 T01-08，尚未执行）。
 
 ## 代码交付
 
@@ -20,9 +20,9 @@
 
 ## 验收进度
 
-- [x] Go gofmt / vet / 单元测试 / race test / Linux amd64 和 arm64 编译通过：[Actions #40652122857](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40652122857)。
+- [x] Go gofmt / vet / 单元测试 / race test / Linux amd64 和 arm64 编译通过：[Actions #40652794807](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40652794807)。
 - [x] Go 的 TLS 受保护路由 / 配对鉴权 / 非法路径 / 已有应用占用 / settings 持久化测试已纳入仓库。
-- [ ] EasyTier 新 REST 接口、Vue 页面、数据库迁移与 native build 的 CI 最终通过。
+- [x] EasyTier REST 接口、Vue 页面、数据库迁移、native/Web 构建及镜像发布 CI 通过：[Actions #40652667024](https://github.com/CiBeDerORG/EasyTier/actions/runs/40652667024)。
 - [ ] Go↔Rust 跨进程 TLS 配对后主机资源查询和修改的真实 E2E。
 - [ ] FnOS 的 Docker socket/CLI 路径、默认软件目录、已安装应用阻断现场验证（T01-08）。
 
