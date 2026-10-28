@@ -2,7 +2,7 @@
 
 > 日期：2026-10-27
 > 代码分支：`CiBeDerORG/EasyTier` 的 `feat/automation-center`
-> 状态：**IN_PROGRESS（实现已提交，Rust/Vue/原生回归及真实 FnOS 联调尚待确认）**
+> 状态：**DONE（CI 构建与回归通过；FnOS 真实主机联调仍归 T01-08）**
 > 最新 CI：[GHCR image / feat-automation-center #40504366359](https://github.com/CiBeDerORG/EasyTier/actions/runs/40504366359)
 > 前提：T01-03 Agent 稳定证书和身份、T01-04 一次性配对、T01-05 server 设备入口。
 
@@ -54,7 +54,7 @@ POST /api/v1/assets/devices/{id}/agent/pair?owner_user_id=...&machine_id=...
 - [x] 代码已提交 EasyTier 功能分支。
 - [x] Cargo.lock、Rust 1.95 格式化任务同步成功，临时 CI 文件已清理。
 - [x] 单元/原生回归脚本已纳入 `asset_agent`、`server_agent_entry` 测试过滤条件。
-- [ ] **完整 Vue/Web build、Rust Cargo 编译与新测试实际通过：等待 #40504366359 结果。**
+- [ ] **完整 Vue/Web 构建、Rust Native 回归和 GHCR 发布已通过 #40504366359。**
 - [ ] **真实 Go EasyHostAgent 与 Rust EasyTier 跨服务 HTTPS 配对联调未执行**，需有测试主机或隔离集成环境。
 - [ ] **真实 FnOS 上 Agent systemd 安装及证书/防火墙环境验证未执行**，归 T01-08。
 - [ ] Agent 的部署、Docker/Compose 与主机系统资源接口仍不在 T01-06 范围内，依后续任务实现。
