@@ -1,7 +1,7 @@
 # T02-03 — Docker 基础操作与按需日志
 
 > 2026-10-28；仓库 `CiBeDerORG/EasyHostAgent`；分支 `main`。
-> 状态：**代码及自动化用例已提交，GitHub Actions 最终验证待本轮后核对；FnOS 真机仍待验收**。
+> 状态：**代码及自动化用例已提交，最新 GitHub Actions #40658092629 已触发，最终结果下次任务开始前核对；FnOS 真机仍待验收**。
 
 ## 交付范围
 
@@ -19,7 +19,7 @@
 - [x] 新增 Go 测试覆盖真实 Unix Socket 模拟 Engine、完整 Compose 资源动作、操作后的真实状态确认、单成员失败后的部分成功记录。
 - [x] 测试覆盖不允许的动作、资源标识不存在、日志截断、Docker stream 解复用与 TTY 文本。
 - [x] TLS 端到端测试覆盖先配对再读取 inventory 和 logs、其他控制端/无 Bearer 被拒、非法日志参数与不存在的同步操作路由。
-- [ ] Go gofmt/vet/race 与 AMD64/ARM64 构建最新结果：本轮不等待；下次新任务开始前按全局规则检查并优先修复失败。
+- [ ] Go gofmt/vet/race 与 AMD64/ARM64 构建最新结果：[Run #40658092629](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40658092629)，本轮不等待；下次新任务开始前按全局规则检查并优先修复失败。
 - [ ] FnOS Docker Engine 权限、Compose 多服务依赖顺序与真实日志需 T02-07 现场验收。
 - [ ] `POST /v1/tasks`、同应用资源互斥和异步日志持久化属于 M4，不能将 T02-03 误标为完整用户端闭环。
 
