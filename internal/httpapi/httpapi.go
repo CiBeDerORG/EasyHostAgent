@@ -14,10 +14,15 @@ import (
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+ "github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
 func NewHandler(state identity.State, platform, version string, stores ...*pairing.Store) http.Handler {
+ return NewHandlerWithHost(state, platform, version, nil, stores...)
+}
+
+func NewHandlerWithHost(state identity.State, platform, version string, service *host.Service, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -45,6 +50,7 @@ func NewHandler(state identity.State, platform, version string, stores ...*pairi
 	// Production must pass a persistent store.
 	if len(stores) != 0 && stores[0] != nil {
 		store := stores[0]
+  if service != nil { registerHost(mux, state.AgentID, store, service) }
 		mux.HandleFunc("/v1/pairings", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				w.Header().Set("Allow", "POST")
