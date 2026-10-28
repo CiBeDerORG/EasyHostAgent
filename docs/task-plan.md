@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 16/50；T01-08 FnOS 实机验收待执行；T02-01～T02-03 Go CI 成功；T02-04 待可信 Deploy 商店与实际接管；T02-05 EasyTier Rust/Web CI #40660451766 通过；T02-06 连续权威扫描缺失证据和只读 UI 已提交，但正式服务/映射清理等待 M4 排他归属模型；Deploy 合约 CI 仍需恢复**。
+> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 16/50；T01-08 FnOS 实机验收待执行；T02-01～T02-03 Go CI 成功，T02-05 EasyTier CI 通过；T02-04 等待 M3 可信商店与 M4 真正接管；T02-06 安全缺失证据 CI #40662950752 通过、正式服务清理等待 M4/M5；T02-07 Go 自动回归 CI 已通过，EasyTier SQLite 回归已提交/原生 CI 待核验，FnOS 真机验收暂缺；Deploy 合约 CI 仍需恢复**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -53,7 +53,7 @@
 | **T02-04 [IN_PROGRESS：安全意向已提交，可信商店匹配待 M3]** 应用发现、匹配和接管 | EHA+ET · 后端 | T02-02/03,T00-03 | EasyTier 已实现基于现有服务器设备和 pinned Agent 的按需 Docker 发现、手工确认、容器成员校验、意向持久化及单主机应用/资源唯一约束和取消。暂不授予 managed 权限；可信 Deploy manifest 匹配依赖 T03-01～03，Agent 持久受管登记依赖 M4。详见 [T02-04 记录](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T02-04-agent-discovery-adoption.md)。 |
 | **T02-05 [DONE：Rust/Web/镜像 CI 通过]** Docker 列表页面与状态缓存 | ET · Vue/Rust | T02-02/04 | 使用已有 Agent 授权设备入口，手动查询 Compose/独立容器及状态；仅完整成功的资源写入 SQLite，离线/不完整返回历史只读快照并禁止接管；支持显式确认/取消意向。详见 [T02-05 记录](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T02-05-docker-list-and-cache.md)，[CI #40660451766](https://github.com/CiBeDerORG/EasyTier/actions/runs/40660451766) 已通过。 |
 | **T02-06 [IN_PROGRESS：安全缺失证据已提交、归属清理待 M4]** “外部删除”安全判定 | ET+EHA · 后端 | T02-04/05 | EasyTier 已增加两次连续完整 Docker 扫描的缺失证据、恢复清除、Agent UUID 隔离、事务性快照更新、只读 UI 与测试；所有候选均 `cleanup_allowed=false`，缺少 M4 受管应用和专属服务/映射所有权模型时**不执行自动清理**。见 [T02-06](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T02-06-external-removal-guards.md)。 |
-| T02-07 Docker 发现回归用例 | EHA+ET · 测试 | T02-01~06 | 验证多个 Compose 项目、独立容器、已停止容器、异常查询、接管、重复扫描不重复实例。 |
+| **T02-07 [IN_PROGRESS：Go CI 通过、Rust/现场待核验]** Docker 发现回归用例 | EHA+ET · 测试 | T02-01~06 | Go Unix Engine mock 完成多 Compose / 独立容器 / 停止与部分失败 / 多次刷新 / 双主机回归，[Go CI #40666918325](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40666918325) 通过。EasyTier SQLite 回归覆盖资源隔离/意向唯一/不完整错误及服务保护，已接入原生 CI、待核验；FnOS 现场 [F01～F15 检查表](./T02-07-fnos-docker-discovery-checklist.md) 待验收。[ET 测试记录](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T02-07-docker-regressions.md)。 |
 
 ## 4. M3：Deploy 中央应用商店（8 项）
 
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06 [IN_PROGRESS：依赖 M3/M4、T02-06 CI 待验收]**，其余 **31 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T02-06：外部删除安全判定的缺失证据已提交、CI 待核验**；真实 FnOS systemd 安装留 T01-08。下一项 T02-07 自动化回归与真实 FnOS 验收准备；可并行进入 M3。实际接管及服务/公网映射清理由 M3/M4/M5 的专属所有权模型支撑，不得误删。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：T02-04/06 依赖 M3/M4，T02-07 Rust CI/真机待验收]**，其余 **30 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T02-07：Go 自动化回归 CI 通过、EasyTier SQLite 原生测试已提交并等待 CI；FnOS 真实联调暂缺**；真实 FnOS systemd 安装仍属 T01-08。下一项 T03-01 Deploy app.yaml 解析/校验，开始补齐可信商店前置条件。实际接管及服务/公网映射清理由 M3/M4/M5 的专属所有权模型支撑，不得误删。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
