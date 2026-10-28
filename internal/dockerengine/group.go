@@ -1,6 +1,7 @@
 package dockerengine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -36,6 +37,18 @@ type GroupedInventory struct {
 	ObservedAt string     `json:"observed_at"`
 	Complete   bool       `json:"complete"`
 	Resources  []Resource `json:"resources"`
+}
+
+// InspectGrouped is the only on-demand read required by the later Docker
+// resource APIs. If an Engine call fails, no authoritative deletion signal
+// escapes the adapter.
+func (c *Client) InspectGrouped(ctx context.Context) (GroupedInventory, error) {
+	snapshot, err := c.Inspect(ctx)
+	grouped, groupErr := Group(snapshot)
+	if err != nil {
+		return grouped, errors.Join(ErrIncomplete, err)
+	}
+	return grouped, groupErr
 }
 
 // Group collects containers with the same com.docker.compose.project label.
