@@ -61,17 +61,17 @@ type Network struct {
 }
 
 type Container struct {
-	ID              string             `json:"Id"`
-	Names           []string           `json:"Names"`
-	Image           string             `json:"Image"`
-	ImageID         string             `json:"ImageID"`
-	Command         string             `json:"Command"`
-	Created         int64              `json:"Created"`
-	State           string             `json:"State"`
-	Status          string             `json:"Status"`
-	Labels          map[string]string  `json:"Labels"`
-	Ports           []Port             `json:"Ports"`
-	Mounts          []Mount            `json:"Mounts"`
+	ID              string            `json:"Id"`
+	Names           []string          `json:"Names"`
+	Image           string            `json:"Image"`
+	ImageID         string            `json:"ImageID"`
+	Command         string            `json:"Command"`
+	Created         int64             `json:"Created"`
+	State           string            `json:"State"`
+	Status          string            `json:"Status"`
+	Labels          map[string]string `json:"Labels"`
+	Ports           []Port            `json:"Ports"`
+	Mounts          []Mount           `json:"Mounts"`
 	NetworkSettings struct {
 		Networks map[string]Network `json:"Networks"`
 	} `json:"NetworkSettings"`
@@ -116,7 +116,7 @@ func New(socketPath string) (*Client, error) {
 		socket: socketPath,
 		http: &http.Client{
 			Transport: tr,
-			Timeout: 10 * time.Second,
+			Timeout:   10 * time.Second,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
