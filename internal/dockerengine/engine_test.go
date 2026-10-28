@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -29,15 +30,15 @@ func testEngine(t *testing.T, handler http.Handler) string {
 }
 
 func TestInspectIncludesStoppedContainersAndImages(t *testing.T) {
-	seenContainers := false
-	seenImages := false
+	var seenContainers atomic.Bool
+	var seenImages atomic.Bool
 	socket := testEngine(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.String() {
 		case "/version":
 			_, _ = w.Write([]byte(`{"Version":"28.3.0","ApiVersion":"1.48","MinAPIVersion":"1.41"}`))
 		case "/v1.41/containers/json?all=1":
-			seenContainers = true
+			seenContainers.Store(true)
 			_, _ = w.Write([]byte(`[
 				{"Id":"running","Names":["/web"],"State":"running","Status":"Up 1 hour",
 				 "Image":"nginx:stable","Labels":{"com.docker.compose.project":"webstack"},
@@ -47,7 +48,7 @@ func TestInspectIncludesStoppedContainersAndImages(t *testing.T) {
 				{"Id":"stopped","Names":["/db"],"State":"exited","Status":"Exited (0)","Image":"postgres:16"}
 			]`))
 		case "/v1.41/images/json?all=1":
-			seenImages = true
+			seenImages.Store(true)
 			_, _ = w.Write([]byte(`[{"Id":"sha256:image","RepoTags":["nginx:stable"],"RepoDigests":["nginx@sha256:abc"],"Size":4096}]`))
 		default:
 			t.Errorf("unexpected Docker request %s", r.URL.String())
@@ -65,7 +66,7 @@ func TestInspectIncludesStoppedContainersAndImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.Complete || got.APIVersion != "1.41" || !seenContainers || !seenImages {
+	if !got.Complete || got.APIVersion != "1.41" || !seenContainers.Load() || !seenImages.Load() {
 		t.Fatalf("incomplete inventory: %+v", got)
 	}
 	if len(got.Containers) != 2 || got.Containers[1].State != "exited" {
