@@ -137,7 +137,9 @@ func TestInspectGroupedOverEngineSocket(t *testing.T) {
 	}
 
 	missing, err := New(filepath.Join(t.TempDir(), "missing.sock"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer missing.Close()
 	invalid, err := missing.InspectGrouped(context.Background())
 	if !errors.Is(err, ErrIncomplete) || !errors.Is(err, ErrUnavailable) || invalid.Complete || len(invalid.Resources) != 0 {
