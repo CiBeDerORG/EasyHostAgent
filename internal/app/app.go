@@ -14,6 +14,7 @@ import (
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
@@ -39,6 +40,11 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("load host settings: %w", err)
 	}
+	engine, err := dockerengine.New("")
+	if err != nil {
+		return fmt.Errorf("initialize local Docker Engine: %w", err)
+	}
+	defer engine.Close()
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("HTTPS listen %q: %w", cfg.ListenAddr, err)
@@ -48,7 +54,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithHost(state, cfg.Platform, buildinfo.Version, hostService, store),
+		Handler:           httpapi.NewHandlerWithDocker(state, cfg.Platform, buildinfo.Version, hostService, engine, store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
