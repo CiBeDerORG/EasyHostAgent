@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 16/50；T01-08 FnOS 实机验收待执行；M2 代码自动回归 EasyHostAgent #40666918325 与 EasyTier #40667123018 均通过；T02-04 需 M3/M4 可信接管，T02-06 正式服务清理需 M4/M5 所有权模型，T02-07 FnOS 真机待验收；T03-01 Deploy 清单校验器和回归代码已提交，Deploy Actions #40672562001 无 job step 即失败，CI 尚未验收，暂不标 DONE。**。
+> 状态：**开发计划执行中，累计 16/50；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机验收阻塞；T02-04/06 等待 M3/M4 的正式受管归属，T02-07 模拟 CI 已通过、真机未验收。T03-01～03 的代码均已提交：manifest 严格校验、Portainer/Sub2API 正式 app.yaml、脚本安全补丁和对应回归。Deploy Actions [#40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) job 无 steps 直接失败，尚未验证 Python CI；三项因此继续 IN_PROGRESS。**
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -60,8 +60,8 @@
 | 任务 | 仓库/负责人 | 前置 | 交付与验收 |
 |---|---|---|---|
 | **T03-01 [IN_PROGRESS：校验器/测试已提交，Deploy Actions 任务未启动即失败]** 实现 manifest 解析/校验 | DEP · Python/Schema | T00-03 | 已实现 [安全校验器](https://github.com/CiBeDerORG/deploy/blob/main/tools/validate_app_manifest.py)、14+ 组反例及正例、真实 Compose/文件/端口/动作/数据安全校验；修复 Portainer 缺失的共享脚本依赖；[工作记录](https://github.com/CiBeDerORG/deploy/blob/main/docs/T03-01-app-manifest-validator.md)。Deploy [CI #40672562001](https://github.com/CiBeDerORG/deploy/actions/runs/40672562001) 在无 step 的情况下失败，未实际执行测试，仍待恢复 CI 验收。 |
-| T03-02 为 Portainer 增加 app.yaml | DEP · 运维 | T03-01 | 描述 Docker 安装、更新、端口、数据路径、脚本依赖；旧命令行入口不变。 |
-| T03-03 为 Sub2API 增加 app.yaml | DEP · 运维 | T03-01 | 正确描述多服务 Compose、主要 Web 端口、用户配置与数据目录。 |
+| **T03-02 [IN_PROGRESS：正式清单与安全补丁已提交，Deploy CI 阻塞]** 为 Portainer 增加 app.yaml | DEP · 运维 | T03-01 | [portainer/app.yaml](https://github.com/CiBeDerORG/deploy/blob/main/portainer/app.yaml) 已发布为正式目录清单，覆盖 9000/tcp Web 入口、密钥、数据目录及实际所需共享镜像库；原安装脚本修复“同名非自有容器会被 stop/rm”的风险，改为只允许 Portainer Compose 所有权，旧入口不变；[交付记录](https://github.com/CiBeDerORG/deploy/blob/main/docs/T03-02-portainer-manifest.md)。CI 尚未启动任何步骤。 |
+| **T03-03 [IN_PROGRESS：正式清单已提交，Deploy CI 阻塞]** 为 Sub2API 增加 app.yaml | DEP · 运维 | T03-01 | [sub2api/app.yaml](https://github.com/CiBeDerORG/deploy/blob/main/sub2api/app.yaml) 已发布为正式目录清单；声明 API+PostgreSQL+Redis 三服务、健康检查、单一 Web 入口、共享 .env/.secrets、自动生成密钥、保留数据与脚本/镜像源依赖，旧 CLI 不变；[交付记录](https://github.com/CiBeDerORG/deploy/blob/main/docs/T03-03-sub2api-manifest.md)。CI 尚未启动任何步骤。 |
 | T03-04 本地 Deploy 商店工作副本 | ET · Rust | T00-03 | EasyTier 后端持有只读 Git 仓库凭证；**仅人工刷新** 才 clone/pull；失败保留旧缓存，不在浏览商店时自动拉取。 |
 | T03-05 商店目录 API 与页面 | ET · Rust/Vue | T03-04 | 分类、搜索、详情、安装方式、参数定义、当前本地索引版本；无需 Agent 即可浏览。 |
 | T03-06 动态安装表单 | ET · Vue | T03-05 | 从 manifest 生成端口、常规变量和密钥输入；不暴露隐藏密钥；目标主机兼容性提示。 |
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：T02-04/06 依赖 M3/M4，T02-07 模拟 CI 已通过、FnOS 待现场]**、**T03-01 [IN_PROGRESS：校验器代码已提交，Deploy CI 在无 step 情况下失败]**，其余 **29 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T02-07：Go 自动化回归 CI 通过、EasyTier SQLite 原生测试已提交并等待 CI；FnOS 真实联调暂缺**；真实 FnOS systemd 安装仍属 T01-08。下一步先检查 Deploy 的 CI/runner 无步骤失败问题，再完善 T03-01 验收；随后推进 T03-02 Portainer 正式 app.yaml 和 T03-03 Sub2API 正式 app.yaml。实际接管及服务/公网映射清理由 M3/M4/M5 的专属所有权模型支撑，不得误删。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：需 M3/M4 或 FnOS 真实验收]**、**T03-01～T03-03 [IN_PROGRESS：清单/代码/回归已提交，Deploy CI job 无 steps 而失败]**，其余 **27 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T03-01～03 代码已提交并接入 CI**；Go/EasyTier T02-07 模拟回归 CI 已通过，但 FnOS 真实联调（含 T01-08）未执行。下一轮先检查 [Deploy CI #40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) 与后续运行是否恢复：无步骤立即失败属仓库 Actions/runner/额度/权限级待查故障，不能视为 Python 测试失败或成功；如仍受阻，继续 T03-04 EasyTier 端只读、人工刷新的 Deploy 工作副本。正式接管及服务/公网映射清理仍等待 M4/M5 归属证明。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
