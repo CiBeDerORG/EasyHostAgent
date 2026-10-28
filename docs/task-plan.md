@@ -39,8 +39,8 @@
 | **T01-03 [DONE]** 设备身份与 HTTPS API | EHA · Go | T01-01 | 已实现稳定 Agent UUID、0700/0600 私钥状态、TLS 1.3 自签名证书与 SPKI SHA-256、本地 `-identity`、只读 `/v1/health` 和 `/v1/identity`、默认拒绝的鉴权中间件；[Go race 测试及双架构构建全绿](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40427223740)；[实施报告](./T01-03-https-identity.md)。配对与持久授权为 T01-04。 |
 | **T01-04 [DONE]** 一次性配对 | EHA · Go | T01-03 | 已实现本地随机一次性码（10 分钟/5 次限制）、HTTPS 配对、Bearer Token 哈希持久化、重配旧 Token 失效和已鉴权解绑；[race 测试及双架构 CI 通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)；[实施与验收报告](./T01-04-pairing.md)。EasyTier Rust 的证书指纹绑定、页面联调归 T01-06。 |
 | **T01-05 [DONE，新增 REST 用例待专项运行]** 易用的服务器设备入口 | ET · Vue/Rust | T00-01/04 | 已实现已登记 server 设备的 Agent 入口、只读鉴权接口、安装引导与旧响应范围防护。[Node 测试通过](https://github.com/CiBeDerORG/EasyTier/actions/runs/40430588698)，[Web 构建/原有 Rust 回归通过](https://github.com/CiBeDerORG/EasyTier/actions/runs/40430588552)；[报告](./T01-05-server-agent-entry.md)明确新增 REST 集成用例已编译但未运行。配对仍属 T01-06。 |
-| **T01-06 [IN_PROGRESS，等待 CI]** 基于设备 IP 按需发现与绑定 | ET · Rust/Vue | T01-03/04/05 | 已提交手动检测/配对弹窗、现有资产设备权限与固定 IP 接入、TLS 1.3 握手阶段 SPKI pin、持久控制端 UUID、AES-GCM Token 加密、绑定唯一性与 IP 改变后手动验证；新增 Rust 与 REST 回归脚本，[最新构建](https://github.com/CiBeDerORG/EasyTier/actions/runs/40504366359)待最终结果，真实 FnOS 联调未执行。 |
-| T01-07 按需主机状态和安装目录 | EHA+ET · Go/Rust | T01-06 | 系统、架构、CPU、内存、磁盘、Docker 可用性按需返回；`SOFTWARE_ROOT` 系统默认、可配置，已有应用时禁止直接变更。 |
+| **T01-06 [DONE，FnOS 真机待验收]** 基于设备 IP 按需发现与绑定 | ET · Rust/Vue | T01-03/04/05 | 已提交手动检测/配对弹窗、现有资产设备权限与固定 IP 接入、TLS 1.3 握手阶段 SPKI pin、持久控制端 UUID、AES-GCM Token 加密、绑定唯一性与 IP 改变后手动验证；新增 Rust 与 REST 回归脚本，[EasyTier CI #40504366359](https://github.com/CiBeDerORG/EasyTier/actions/runs/40504366359)全部成功；真实 FnOS 联调归 T01-08。 |
+| **T01-07 [IN_PROGRESS，EasyTier CI 待验证]** 按需主机状态和安装目录 | EHA+ET · Go/Rust | T01-06 | Go Agent 已实现按需资源查询、`SOFTWARE_ROOT` 默认及原子持久设置、受管应用占用阻断，[CI #40652122857](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40652122857)成功；EasyTier 已实现绑定设备读取、离线快照和 UI，主构建待最终验证。[详见 T01-07 实现记录](./T01-07-host-snapshot.md)。 |
 | T01-08 主机接入端到端验收 | ET+EHA · 测试 | T01-01~07 | FnOS 完成安装、发现、配对、查询、离线缓存、解绑后重新配对；无心跳/后台定时查询。 |
 
 ## 3. M2：Docker 识别与外部应用（7 项）
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05、T01-01～T01-05 [DONE]**（M0 五项 + M1 五项），余下 **40 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。下一个任务是 **T01-06：基于设备 IP 按需发现与绑定 Agent**；真实 FnOS systemd 安装留 T01-08。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05、T01-01～T01-05 [DONE]**（M0 五项 + M1 五项），余下 **40 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前进行中 **T01-07：按需主机状态和安装目录**；真实 FnOS systemd 安装留 T01-08。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
