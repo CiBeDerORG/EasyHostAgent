@@ -1,7 +1,7 @@
 # T02-01 — Docker Engine 本地适配器
 
 > 日期：2026-10-28；目标分支 `CiBeDerORG/EasyHostAgent/main`。
-> 状态：**实现已提交 / CI 待本轮构建验证**；真实 FnOS Docker Engine 待 T02-07 联调。
+> 状态：**代码及 CI 已完成**；真实 FnOS Docker Engine 待 T02-07 联调。
 
 ## 实现内容
 - `internal/dockerengine` 新增按需调用的 `Client.Inspect(ctx)`。仅连接本机 Unix socket `/var/run/docker.sock`，不读取 `DOCKER_HOST`、不接受 Docker TCP 地址、禁用 HTTP 代理与重定向；支持测试时指定临时 Unix socket。
@@ -16,7 +16,7 @@
 ## 测试清单
 - [x] 源码中包含隔离 Unix socket 假 Engine 测试：两个不同状态的容器、镜像、标签、端口、挂载、网络。
 - [x] 源码中包含版本降级/最小版本协商、无 Docker、403 权限错误、部分成功不触发误删除标记的测试。
-- [ ] Go 格式检查、vet、race、amd64/arm64 CI 通过（本轮异步执行，不阻塞下个任务）。
+- [x] Go 格式检查、vet、race、amd64/arm64 CI 通过：[Actions #40656579274](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40656579274)。
 - [ ] FnOS 真 Docker socket 权限与大量容器性能测试。
 
 ## 下一步
