@@ -26,7 +26,7 @@ func registerDocker(mux *http.ServeMux, agentID string, store *pairing.Store, en
 		payload := map[string]any{
 			"agent_id": agentID, "observed_at": snapshot.ObservedAt,
 			"complete": err == nil && snapshot.Complete,
-			"status": "ok", "resources": resources,
+			"status":   "ok", "resources": resources,
 		}
 		if err != nil {
 			payload["status"] = "error"
