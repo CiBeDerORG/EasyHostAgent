@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -275,7 +276,7 @@ func docker(ctx context.Context) Docker {
 	var info struct {
 		Version string `json:"Version"`
 	}
-	if json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 4096)).Decode(&info) != nil {
+	if json.NewDecoder(io.LimitReader(resp.Body, 4097)).Decode(&info) != nil {
 		result.Error = "Invalid Docker Engine response"
 		return result
 	}
