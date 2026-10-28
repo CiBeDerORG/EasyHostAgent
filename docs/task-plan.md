@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-05 已提交，累计 10/50；后续 40 项未开始。T01-05 Web/Node 及原有 Rust 回归成功；新增 REST 用例尚未实际执行，完整 GHCR 打包待结果。Deploy 合约 CI 仍需恢复**。
+> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-06 已提交并完成 CI 验证，累计 11/50；T01-07 进行中。T01-08 FnOS 现场验收未执行；Deploy 合约 CI 仍需恢复**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-27：**T00-01～T00-05、T01-01～T01-05 [DONE]**（M0 五项 + M1 五项），余下 **40 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前进行中 **T01-07：按需主机状态和安装目录**；真实 FnOS systemd 安装留 T01-08。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-06 [DONE]**（M0 五项 + M1 六项），**T01-07 [IN_PROGRESS]**，其余 **38 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前进行中 **T01-07：按需主机状态和安装目录**；真实 FnOS systemd 安装留 T01-08。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
