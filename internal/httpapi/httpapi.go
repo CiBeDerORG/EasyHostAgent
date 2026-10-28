@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
@@ -23,6 +24,12 @@ func NewHandler(state identity.State, platform, version string, stores ...*pairi
 }
 
 func NewHandlerWithHost(state identity.State, platform, version string, service *host.Service, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithDocker(state, platform, version, service, nil, stores...)
+}
+
+// NewHandlerWithDocker wires read-only Docker APIs only when a paired store
+// and explicitly configured local Docker Engine are both present.
+func NewHandlerWithDocker(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -52,6 +59,9 @@ func NewHandlerWithHost(state identity.State, platform, version string, service 
 		store := stores[0]
 		if service != nil {
 			registerHost(mux, state.AgentID, store, service)
+		}
+		if engine != nil {
+			registerDocker(mux, state.AgentID, store, engine)
 		}
 		mux.HandleFunc("/v1/pairings", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
