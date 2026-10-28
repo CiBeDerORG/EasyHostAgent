@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 12/50；T01-08 真实 FnOS 环境暂缺，已编写现场验收步骤；T02-01 Docker Engine 适配器及 T02-02 Compose 分组与隔离测试已提交，Go CI 待下次任务开始检查；Deploy 合约 CI 仍需恢复**。
+> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 13/50；T01-08 真实 FnOS 环境暂缺，已编写现场验收步骤；T02-01 Docker Engine 适配器 CI 已通过；T02-02 Compose 分组及测试已提交，最新 CI 正在运行（不等待）；Deploy 合约 CI 仍需恢复**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -47,7 +47,7 @@
 
 | 任务 | 仓库/负责人 | 前置 | 交付与验收 |
 |---|---|---|---|
-| **T02-01 [IN_PROGRESS：代码提交，构建结果需核验]** Docker Engine 适配器 | EHA · Go | T01-01 | 已用 Go 原生 HTTP/Unix Socket 实现 Engine 官方 API 版本协商、权限区分、全部容器与镜像、端口/挂载/标签/网络读取、部分成功安全标记，含隔离测试；与原定 Go SDK 依赖有差异，见 [实现记录](./T02-01-docker-engine.md)，下次任务开始先核验 CI。 |
+| **T02-01 [DONE：Go CI 全绿，FnOS 真机归 T02-07]** Docker Engine 适配器 | EHA · Go | T01-01 | Go 原生 HTTP/Unix Socket 完成 Engine API 版本协商、权限检查、全部容器/镜像及元信息读取、安全不完整标记；[Go CI #40656579274](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40656579274)通过。SDK 依赖方案差异见 [实现记录](./T02-01-docker-engine.md)，FnOS 真机归 T02-07。 |
 | **T02-02 [IN_PROGRESS：代码提交、CI 待核验]** Compose 聚合 | EHA · Go | T02-01 | 基于 `com.docker.compose.project` 聚合 Sub2API 与数据库，独立容器单独展示；完整快照前提、稳定 ID、排序、状态汇总及隔离测试已提交，见 [T02-02](./T02-02-compose-grouping.md)。 |
 | T02-03 Docker 基础操作与日志 | EHA · Go | T02-01 | 容器/Compose 运行状态、启动、停止、重启、按需日志；稳定标识及权限验证。 |
 | T02-04 应用发现、匹配和接管 | EHA+ET · 后端 | T02-02/03,T00-03 | 区分 Deploy 受管、可接管、外部 Docker；外部只允许基础操作；用户确认匹配才接管；同主机同应用不得重复受管。 |
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01/T02-02 [IN_PROGRESS：代码已提交、CI 待验证]**，其余 **35 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前进行中 **T01-07：按需主机状态和安装目录**；真实 FnOS systemd 安装留 T01-08。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01 [DONE，CI 成功]**、**T02-02 [IN_PROGRESS：代码已提交、CI 待验证]**，其余 **35 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前进行中 **T01-07：按需主机状态和安装目录**；真实 FnOS systemd 安装留 T01-08。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
