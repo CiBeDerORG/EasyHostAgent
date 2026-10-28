@@ -147,7 +147,6 @@ func TestInspectGroupedOverEngineSocket(t *testing.T) {
 	}
 }
 
-
 func TestGroupSameImageWithoutProjectLabelRemainsIndependent(t *testing.T) {
 	a := makeContainer("standalone-a", "redis", "running", "", "db")
 	b := makeContainer("standalone-b", "redis", "exited", "", "db")
