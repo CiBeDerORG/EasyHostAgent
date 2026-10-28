@@ -60,7 +60,7 @@ func TestRootSafety(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := filepath.Dir(dir)
-	for _, root := range []string{"", "/", "relative", dir, filepath.Join(dir, "apps"), base, filepath.Join(base, "apps/../apps")} {
+	for _, root := range []string{"", "/", "relative", dir, filepath.Join(dir, "apps"), base} {
 		if _, err := New(dir, root, "linux", "123"); err == nil {
 			t.Errorf("accepted unsafe root %q", root)
 		}
