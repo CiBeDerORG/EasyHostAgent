@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 15/50；T01-08 FnOS 实机验收待执行；T02-01～T02-03 代码及 Go CI 全部通过；T02-04 EasyTier 后端发现、用户确认意向与唯一约束已提交，可信 Deploy manifest 校验与实际接管仍待 M3/M4；EasyTier CI 待下次检查；Deploy 合约 CI 仍需恢复**。
+> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 15/50；T01-08 FnOS 实机验收待执行；T02-01～T02-03 代码及 Go CI 全部通过；T02-04 意向流程尚待 M3/M4 可信商店与实际接管；T02-05 Docker 资源列表与离线缓存代码已提交，Rust/Web CI 下次执行前检查；Deploy 合约 CI 仍需恢复**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -51,7 +51,7 @@
 | **T02-02 [DONE：修复后 CI 通过]** Compose 聚合 | EHA · Go | T02-01 | 基于 `com.docker.compose.project` 聚合 Sub2API 与数据库，独立容器单独展示；完整快照前提、稳定 ID、排序、状态汇总及隔离测试已提交；修复格式问题后 [CI #40657461251](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40657461251) 通过，见 [T02-02](./T02-02-compose-grouping.md)。 |
 | **T02-03 [DONE：Go CI 通过]** Docker 基础操作与日志 | EHA · Go | T02-01 | 已实现 Docker/Compose start/stop/restart 内部执行器、部分成功/执行后核对、限量日志、Bearer 鉴权的清单及日志接口和模拟 Engine/TLS 用例；根据协议，外部启停由 M4 持久化任务接口承接，不私设同步 POST。见 [T02-03 记录](./T02-03-docker-actions-logs.md)；修复测试后 [Go CI #40658529834](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40658529834) 通过。 |
 | **T02-04 [IN_PROGRESS：安全意向已提交，可信商店匹配待 M3]** 应用发现、匹配和接管 | EHA+ET · 后端 | T02-02/03,T00-03 | EasyTier 已实现基于现有服务器设备和 pinned Agent 的按需 Docker 发现、手工确认、容器成员校验、意向持久化及单主机应用/资源唯一约束和取消。暂不授予 managed 权限；可信 Deploy manifest 匹配依赖 T03-01～03，Agent 持久受管登记依赖 M4。详见 [T02-04 记录](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T02-04-agent-discovery-adoption.md)。 |
-| T02-05 Docker 列表页面与状态缓存 | ET · Vue/Rust | T02-02/04 | 页面查询时刷新；离线展示上次数据及时间；服务停止不是已删除。 |
+| **T02-05 [IN_PROGRESS：列表与离线缓存提交，CI 待核验]** Docker 列表页面与状态缓存 | ET · Vue/Rust | T02-02/04 | 使用已有 Agent 授权设备入口，手动查询 Compose/独立容器及状态；仅完整成功的资源写入 SQLite，离线/不完整返回历史只读快照并禁止接管；支持显式确认/取消意向。详见 [T02-05 记录](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T02-05-docker-list-and-cache.md)。 |
 | T02-06 “外部删除”安全判定 | ET+EHA · 后端 | T02-04/05 | Docker 查询**完整成功**且资源确已不在时才触发应用记录/服务/专属映射清理；Docker 错误不能清理。 |
 | T02-07 Docker 发现回归用例 | EHA+ET · 测试 | T02-01~06 | 验证多个 Compose 项目、独立容器、已停止容器、异常查询、接管、重复扫描不重复实例。 |
 
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03 [DONE，Go CI 成功]**、**T02-04 [IN_PROGRESS：已提交，商店依赖/CI 待验收]**，其余 **33 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T02-04：应用发现、匹配和接管**；真实 FnOS systemd 安装留 T01-08；下一开发项可并行开始 T02-05 UI 与离线快照，真实权限升级仍须等 M3/M4。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03 [DONE，Go CI 成功]**、**T02-04/T02-05 [IN_PROGRESS：T02-04 可信商店依赖、T02-05 CI 待验收]**，其余 **32 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T02-04：应用发现、匹配和接管**；真实 FnOS systemd 安装留 T01-08；下一开发项是 T02-06 外部删除安全判定；先检查最新 EasyTier CI，失败优先修复。实际受管升级仍须等 M3/M4。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
