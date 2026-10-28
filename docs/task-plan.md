@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中，累计 16/50；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 正式清单/校验代码已提交，Deploy Actions [#40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) Job 无步骤失败。T03-04/05 EasyTier Git 本地商店/事务快照/只读目录 API/搜索详情 Vue 已提交，Rust/Web CI 及实际私有 Git 刷新待核验；七项进行中、独立真机阻塞，不虚报已完成。**
+> 状态：**开发计划执行中，累计 16/50；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 正式清单/校验代码已提交，Deploy Actions [#40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) Job 无步骤失败。T03-04/05 EasyTier Git 本地商店/事务快照/只读目录 API/搜索详情 Vue 已提交，Rust/Web CI 及实际私有 Git 刷新待核验；八项进行中、独立真机阻塞，不虚报已完成。**
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
