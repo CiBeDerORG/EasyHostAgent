@@ -72,6 +72,10 @@ func TestDockerReadRoutesArePairedAndReadOnly(t *testing.T) {
 			t.Fatal(e)
 		}
 		defer resp.Body.Close()
+		// Go ServeMux returns a plain-text 404 for intentionally absent action routes.
+		if resp.StatusCode == http.StatusNotFound {
+			return resp.StatusCode, nil
+		}
 		var value map[string]any
 		if e := json.NewDecoder(resp.Body).Decode(&value); e != nil {
 			t.Fatal(e)
