@@ -15,6 +15,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/app"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
@@ -49,6 +50,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if *checkConfig {
+		hostService, err := host.New(cfg.DataDir, cfg.SoftwareRoot, cfg.Platform, "")
+		if err != nil {
+			fmt.Fprintln(stderr, "host configuration error:", err)
+			return 1
+		}
+		cfg.SoftwareRoot, err = hostService.Root()
+		if err != nil {
+			fmt.Fprintln(stderr, "host configuration error:", err)
+			return 1
+		}
 		fmt.Fprintf(stdout, "configuration valid: data_dir=%s software_root=%s listen=%s log_level=%s\n",
 			cfg.DataDir, cfg.SoftwareRoot, cfg.ListenAddr, cfg.LogLevel)
 		return 0
