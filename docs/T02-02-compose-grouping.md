@@ -1,7 +1,7 @@
 # T02-02 — Docker Compose 项目聚合
 
 > 2026-10-28；代码分支 `CiBeDerORG/EasyHostAgent/main`。
-> 进度：**代码和测试已提交；GitHub Actions #40657179844 本轮已触发，最终结果下次任务开始时检查**。
+> 进度：**DONE：源码格式修复后 Go CI 通过；FnOS 实机归 T02-07**。
 
 ## 设计与实现
 
@@ -18,7 +18,7 @@
 - [x] 代码包含 Sub2API Web + PostgreSQL 多容器 Compose 归并、同镜像独立容器不误归并、不同 Compose 项目隔离。
 - [x] 代码包含停止容器、部分运行、完全停止、空项目、未知状态、乱序快照、重复 ID、缺失 ID、非完整快照验证。
 - [x] 代码包含 Mock Docker Engine Unix socket → InspectGrouped → Compose 聚合端到端隔离测试，以及 Engine 离线不生成权威清单测试。
-- [ ] GitHub Actions gofmt、vet、race 与 Linux amd64/arm64 CI：[Run #40657179844](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40657179844)，本轮不等待完成，下次任务开始前检查并修复。
+- [x] GitHub Actions gofmt、vet、race 与 Linux amd64/arm64 CI：首次运行 #40657179844 因 gofmt 失败，提交修复 [11811f27](https://github.com/CiBeDerORG/EasyHostAgent/commit/11811f27bbe8724ec973181ac934b8d004263051) 后 [Run #40657461251](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40657461251) 通过。
 - [ ] 真正 FnOS + Sub2API 容器现场检查，归 T02-07。
 
 ## 下一步
