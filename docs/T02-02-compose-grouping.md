@@ -1,7 +1,7 @@
 # T02-02 — Docker Compose 项目聚合
 
 > 2026-10-28；代码分支 `CiBeDerORG/EasyHostAgent/main`。
-> 进度：**代码及隔离测试已提交，CI 最终结果下次任务开始时检查**。
+> 进度：**代码和测试已提交；GitHub Actions #40657179844 本轮已触发，最终结果下次任务开始时检查**。
 
 ## 设计与实现
 
@@ -18,7 +18,7 @@
 - [x] 代码包含 Sub2API Web + PostgreSQL 多容器 Compose 归并、同镜像独立容器不误归并、不同 Compose 项目隔离。
 - [x] 代码包含停止容器、部分运行、完全停止、空项目、未知状态、乱序快照、重复 ID、缺失 ID、非完整快照验证。
 - [x] 代码包含 Mock Docker Engine Unix socket → InspectGrouped → Compose 聚合端到端隔离测试，以及 Engine 离线不生成权威清单测试。
-- [ ] 本轮 GitHub Actions gofmt、vet、race 与 Linux amd64/arm64 完整 CI：下次任务开始前检查并修复，不在本次等待。
+- [ ] GitHub Actions gofmt、vet、race 与 Linux amd64/arm64 CI：[Run #40657179844](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40657179844)，本轮不等待完成，下次任务开始前检查并修复。
 - [ ] 真正 FnOS + Sub2API 容器现场检查，归 T02-07。
 
 ## 下一步
