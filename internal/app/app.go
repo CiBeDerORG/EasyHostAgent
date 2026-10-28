@@ -14,8 +14,8 @@ import (
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
- "github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
@@ -30,8 +30,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("load controller authorization: %w", err)
 	}
 	hostService, err := host.New(cfg.DataDir, cfg.SoftwareRoot, cfg.Platform, state.AgentID)
- if err != nil { return fmt.Errorf("load host settings: %w", err) }
- ln, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		return fmt.Errorf("load host settings: %w", err)
+	}
+	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("HTTPS listen %q: %w", cfg.ListenAddr, err)
 	}
