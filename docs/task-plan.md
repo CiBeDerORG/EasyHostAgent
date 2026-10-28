@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-06 已提交并完成 CI 验证，累计 11/50；T01-07 进行中。T01-08 FnOS 现场验收未执行；Deploy 合约 CI 仍需恢复**。
+> 状态：**开发计划执行中：M0 五项完成，M1 的 T01-01～T01-07 已提交并完成代码/CI 验证，累计 12/50；T01-08 真实 FnOS 环境暂缺，已编写现场验收步骤；T02-01 本地 Engine 适配器代码和隔离测试已提交，最新 Go CI 待下一次任务开始时检查；Deploy 合约 CI 仍需恢复**。
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -40,14 +40,14 @@
 | **T01-04 [DONE]** 一次性配对 | EHA · Go | T01-03 | 已实现本地随机一次性码（10 分钟/5 次限制）、HTTPS 配对、Bearer Token 哈希持久化、重配旧 Token 失效和已鉴权解绑；[race 测试及双架构 CI 通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)；[实施与验收报告](./T01-04-pairing.md)。EasyTier Rust 的证书指纹绑定、页面联调归 T01-06。 |
 | **T01-05 [DONE，新增 REST 用例待专项运行]** 易用的服务器设备入口 | ET · Vue/Rust | T00-01/04 | 已实现已登记 server 设备的 Agent 入口、只读鉴权接口、安装引导与旧响应范围防护。[Node 测试通过](https://github.com/CiBeDerORG/EasyTier/actions/runs/40430588698)，[Web 构建/原有 Rust 回归通过](https://github.com/CiBeDerORG/EasyTier/actions/runs/40430588552)；[报告](./T01-05-server-agent-entry.md)明确新增 REST 集成用例已编译但未运行。配对仍属 T01-06。 |
 | **T01-06 [DONE，FnOS 真机待验收]** 基于设备 IP 按需发现与绑定 | ET · Rust/Vue | T01-03/04/05 | 已提交手动检测/配对弹窗、现有资产设备权限与固定 IP 接入、TLS 1.3 握手阶段 SPKI pin、持久控制端 UUID、AES-GCM Token 加密、绑定唯一性与 IP 改变后手动验证；新增 Rust 与 REST 回归脚本，[EasyTier CI #40504366359](https://github.com/CiBeDerORG/EasyTier/actions/runs/40504366359)全部成功；真实 FnOS 联调归 T01-08。 |
-| **T01-07 [IN_PROGRESS，EasyTier CI 待验证]** 按需主机状态和安装目录 | EHA+ET · Go/Rust | T01-06 | Go Agent 已实现按需资源查询、`SOFTWARE_ROOT` 默认及原子持久设置、受管应用占用阻断，[CI #40652122857](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40652122857)成功；EasyTier 已实现绑定设备读取、离线快照和 UI，主构建待最终验证。[详见 T01-07 实现记录](./T01-07-host-snapshot.md)。 |
-| T01-08 主机接入端到端验收 | ET+EHA · 测试 | T01-01~07 | FnOS 完成安装、发现、配对、查询、离线缓存、解绑后重新配对；无心跳/后台定时查询。 |
+| **T01-07 [DONE，双仓库 CI 通过]** 按需主机状态和安装目录 | EHA+ET · Go/Rust | T01-06 | Go Agent 已实现按需资源查询、`SOFTWARE_ROOT` 默认及原子持久设置、受管应用占用阻断，[Go CI #40652794807](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40652794807)与 [EasyTier CI #40652667024](https://github.com/CiBeDerORG/EasyTier/actions/runs/40652667024)全部成功，现场 FnOS 联调归 T01-08。[详见 T01-07 实现记录](./T01-07-host-snapshot.md)。 |
+| **T01-08 [BLOCKED：真实 FnOS 现场验收]** 主机接入端到端验收 | ET+EHA · 测试 | T01-01~07 | 真实 FnOS 需完成安装、发现、配对、查询、离线缓存、解绑后重新配对；当前环境无主机权限，已提交 [现场验收清单](./T01-08-fnos-e2e.md)，不阻塞 M2 的独立代码任务。 |
 
 ## 3. M2：Docker 识别与外部应用（7 项）
 
 | 任务 | 仓库/负责人 | 前置 | 交付与验收 |
 |---|---|---|---|
-| T02-01 Docker Engine 适配器 | EHA · Go | T01-01 | Go SDK 检测 Docker、API 版本和权限，列出运行中/已停止容器与镜像、端口、卷、标签。 |
+| **T02-01 [IN_PROGRESS：代码已提交，CI 待查]** Docker Engine 适配器 | EHA · Go | T01-01 | 已用 Go 原生 HTTP/Unix Socket 实现 Engine 官方 API 版本协商、权限区分、全部容器与镜像、端口/挂载/标签/网络读取、部分成功安全标记，含隔离测试；与原定 Go SDK 依赖有差异，见 [实现记录](./T02-01-docker-engine.md)，下次任务开始先核验 CI。 |
 | T02-02 Compose 聚合 | EHA · Go | T02-01 | 基于 `com.docker.compose.project` 聚合服务容器，不将 Sub2API+数据库错误拆为多应用；独立容器单独展示。 |
 | T02-03 Docker 基础操作与日志 | EHA · Go | T02-01 | 容器/Compose 运行状态、启动、停止、重启、按需日志；稳定标识及权限验证。 |
 | T02-04 应用发现、匹配和接管 | EHA+ET · 后端 | T02-02/03,T00-03 | 区分 Deploy 受管、可接管、外部 Docker；外部只允许基础操作；用户确认匹配才接管；同主机同应用不得重复受管。 |
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-06 [DONE]**（M0 五项 + M1 六项），**T01-07 [IN_PROGRESS]**，其余 **38 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前进行中 **T01-07：按需主机状态和安装目录**；真实 FnOS systemd 安装留 T01-08。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01 [IN_PROGRESS：代码已提交、CI 待验证]**，其余 **36 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前进行中 **T01-07：按需主机状态和安装目录**；真实 FnOS systemd 安装留 T01-08。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
@@ -120,6 +120,12 @@
 6. 新发现的风险与下一项依赖。
 
 建议每一条小任务完成就提交对应仓库，不把 3 个仓库的大批更改混成一次发布；涉及协议的破坏性变更先更新契约测试并协调。
+
+### 全局 CI 与提交续接规则（2026-10-28 用户确认）
+- 每完成一个任务立即 commit + push；返回任务编号、已做事项、更新后的 M0～M6 任务表、**每个仓库的提交 URL** 和 **本次构建 URL**，不用等待构建结果。
+- 下一次任务开始时，先检查上次提交对应的 **最新** GitHub Actions：成功则继续；**排队/执行中继续开发**；失败则先定位和修复并提交，再执行新任务；取消则判断是否被较新 run 取代，不能拿旧失败重复处理。
+- 绝不将 “构建已触发” 写成 “构建已通过”；对无法在当前会话实测的 FnOS 真机验收标 BLOCKED，不当 DONE。
+- 旧式 DeployToken、系统级软件目录环境值、独立并行资产系统不得代替当前 Agent 认证与每主机设置。
 
 ## 9. 明确不得擅自增加的工程范围
 
