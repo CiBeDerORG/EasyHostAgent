@@ -29,6 +29,12 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("load controller authorization: %w", err)
 	}
+	if cfg.SoftwareRoot == "" {
+		cfg.SoftwareRoot = config.DefaultLinuxRoot
+		if cfg.Platform == "fnos" {
+			cfg.SoftwareRoot = config.DefaultFnOSRoot
+		}
+	}
 	hostService, err := host.New(cfg.DataDir, cfg.SoftwareRoot, cfg.Platform, state.AgentID)
 	if err != nil {
 		return fmt.Errorf("load host settings: %w", err)
