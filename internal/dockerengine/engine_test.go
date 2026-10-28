@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -145,5 +144,4 @@ func TestUnavailableSocketAndVersionNegotiation(t *testing.T) {
 			t.Errorf("accepted invalid socket path %q", p)
 		}
 	}
-	_ = os.Remove(filepath.Join(root, "no-docker.sock"))
 }
