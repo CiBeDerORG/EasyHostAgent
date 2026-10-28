@@ -162,7 +162,7 @@ func parseAPI(value string) (int, int, error) {
 	if !ok || major == "" || minor == "" || strings.Contains(minor, ".") {
 		return 0, 0, ErrProtocol
 	}
-	m, a := strconv.Atoi(major), 0
+	m, a := strconv.Atoi(major)
 	n, b := strconv.Atoi(minor)
 	if a != nil || b != nil || m != 1 || n < 0 || n > 999 {
 		return 0, 0, ErrProtocol
