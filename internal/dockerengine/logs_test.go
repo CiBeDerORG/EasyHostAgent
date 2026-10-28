@@ -68,3 +68,11 @@ func TestDockerRawLogFrames(t *testing.T) {
 		t.Fatalf("stream frames corrupted: %q", got)
 	}
 }
+
+func TestPublicErrorNeverExposesHostSocketPath(t *testing.T) {
+	err := errors.Join(ErrIncomplete, ErrUnavailable, errors.New("/private/host/docker.sock: password=secret"))
+	got := PublicError(err)
+	if strings.Contains(got, "/private/") || strings.Contains(got, "secret") {
+		t.Fatalf("sanitized Docker error leaked implementation details: %q", got)
+	}
+}
