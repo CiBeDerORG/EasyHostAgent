@@ -1,5 +1,5 @@
-// Package httpapi exposes the Agent discovery and one-time pairing endpoints.
-// No Docker or task execution routes are available in T01-04.
+// Package httpapi exposes the Agent discovery, pairing, package and task-history endpoints.
+// Task submission and execution remain disabled until the T04-03 allowlisted runner is wired in.
 package httpapi
 
 import (
@@ -18,6 +18,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/taskstore"
 )
 
 func NewHandler(state identity.State, platform, version string, stores ...*pairing.Store) http.Handler {
@@ -37,6 +38,11 @@ func NewHandlerWithDocker(state identity.State, platform, version string, servic
 // NewHandlerWithPackages stages only SHA-256 verified packages; no execution
 // endpoints are exposed before the M4 task runner is complete.
 func NewHandlerWithPackages(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, packages *deploypackage.Store, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithTasks(state, platform, version, service, engine, packages, nil, stores...)
+}
+
+// NewHandlerWithTasks wires persistent task history without enabling execution.
+func NewHandlerWithTasks(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, packages *deploypackage.Store, tasks *taskstore.Store, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -72,6 +78,9 @@ func NewHandlerWithPackages(state identity.State, platform, version string, serv
 		}
 		if packages != nil {
 			registerPackages(mux, state.AgentID, store, packages)
+		}
+		if tasks != nil {
+			registerTasks(mux, state.AgentID, store, tasks)
 		}
 		mux.HandleFunc("/v1/pairings", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {

@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中，累计 16/50；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 正式清单/校验代码已提交，Deploy Actions [#40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) Job 无步骤失败。T03-04/05 EasyTier 本地 Git 商店、事务快照、只读 API 与页面已提交；T03-06/07 动态配置表单、严格 YAML、固定包打包已提交；T03-08 Agent 验证/不可变保存及 EasyTier 配对设备固定包传输接口已提交，Agent [Go CI #40809855033](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40809855033) race/amd64/arm64 全通过，新分支 EasyTier [CI #40810348754](https://github.com/CiBeDerORG/EasyTier/actions/runs/40810348754) 仍待结果，真机 FnOS 和实际私库拉取未执行；十一项进行中、独立真机阻塞。**
+> 状态：**累计 16/50 项已完成；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 清单/校验代码已提交，真实 Deploy CI 验收仍需核验；T03-04/05 商店、T03-06/07 表单与固定包、T03-08 Agent 收包与 EasyTier 传输接口已提交。Agent Contract Tests [#40810743411](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40810743411) 成功；EasyTier 镜像 CI [#40810348754](https://github.com/CiBeDerORG/EasyTier/actions/runs/40810348754) 成功（对应前一个代码提交，最新提交为文档更新）。T04-01 SQLite 任务存储、状态机、日志脱敏与只读查询接口已提交，新 CI 待核验；FnOS 真机和实际私库拉取仍未执行。**
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。**后续 M0～M6 开发全部提交到三个仓库统一的 `feat/server-app-lifecycle` 新分支；不再向 `feat/m0-m6`、`feat/automation-center` 或 `main` 直接提交本项目修改。**
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -72,7 +72,7 @@
 
 | 任务 | 仓库/负责人 | 前置 | 交付与验收 |
 |---|---|---|---|
-| T04-01 本地任务数据库与状态机 | EHA · Go | T01-01,T00-02 | SQLite 持久化任务 ID/状态/退出码/日志游标；请求去重，未知提交结果可查；重启中断标失败**不自动恢复**。 |
+| **T04-01 [CODE COMMITTED / CI PENDING]** 本地任务数据库与状态机 | EHA · Go | T01-01,T00-02 | 已提交 SQLite 持久化任务、幂等请求摘要、AES-GCM 请求加密、合法状态转换、退出码/结果/日志游标、跨日志块密钥脱敏；重启将未结束任务标记 `interrupted` 且不自动恢复。只读列表/状态/日志查询已接入；提交/执行接口留待 T04-03。详见 [T04-01 记录](./T04-01-task-store.md)。 |
 | T04-02 多任务并发与取消 | EHA · Go | T04-01 | 不同应用并行、同一应用互斥、全局配置资源加锁；安全取消、保留现场、无自动回滚。 |
 | T04-03 Deploy 执行器 | EHA · Go | T03-08,T04-01 | 严格按 manifest 允许动作执行脚本/Compose，传参数但不允许前端任意命令；写执行日志、限制超时、控制进程组。 |
 | T04-04 配置文件适配器 | EHA+DEP · Go/脚本 | T03-02,T04-03 | 兼容 Deploy 统一 `.env`/`.secrets`，锁和原子写入、不丢旧用户配置、密钥绝不明文回显；新参数用模板默认值。 |

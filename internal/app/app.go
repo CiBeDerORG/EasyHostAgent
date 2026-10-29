@@ -20,6 +20,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/taskstore"
 )
 
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
@@ -50,6 +51,11 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize private package staging: %w", err)
 	}
+	tasks, err := taskstore.New(cfg.DataDir, state.AgentID)
+	if err != nil {
+		return fmt.Errorf("initialize local task store: %w", err)
+	}
+	defer tasks.Close()
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("HTTPS listen %q: %w", cfg.ListenAddr, err)
@@ -59,7 +65,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithPackages(state, cfg.Platform, buildinfo.Version, hostService, engine, packages, store),
+		Handler:           httpapi.NewHandlerWithTasks(state, cfg.Platform, buildinfo.Version, hostService, engine, packages, tasks, store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
