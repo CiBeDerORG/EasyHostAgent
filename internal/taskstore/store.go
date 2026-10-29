@@ -28,6 +28,28 @@ import (
 )
 
 const (
+	SchemaVersion       = 1
+	MaxTaskRequestBytes = 8 << 20
+	MaxLogAppendBytes   = 1 << 20
+	MaxLogChunkBytes    = 256 << 10
+)
+
+var (
+	ErrConflict          = errors.New("task ID already exists with different request")
+	ErrNotFound          = errors.New("task not found")
+	ErrInvalidRequest    = errors.New("invalid task request")
+	ErrInvalidTransition = errors.New("invalid task state transition")
+	ErrInvalidOffset     = errors.New("invalid task log offset")
+	ErrTerminalTask      = errors.New("task is already terminal")
+	uuidPattern          = regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+	sha256Pattern        = regexp.MustCompile("^[0-9a-f]{64}$")
+	sha1Pattern          = regexp.MustCompile("^[0-9a-f]{40}$")
+	appIDPattern         = regexp.MustCompile("^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
+)
+
+type Status string
+
+const (
 	StatusAccepted    Status = "accepted"
 	StatusRunning     Status = "running"
 	StatusCancelling  Status = "cancelling"
@@ -35,7 +57,6 @@ const (
 	StatusFailed      Status = "failed"
 	StatusCancelled   Status = "cancelled"
 	StatusInterrupted Status = "interrupted"
-)
 )
 
 func (s Status) Terminal() bool {
