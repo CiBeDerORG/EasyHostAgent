@@ -17,9 +17,9 @@ const (
 )
 
 var (
-	ErrClosed         = errors.New("task scheduler is closed")
-	ErrInvalidLockKey = errors.New("invalid shared resource lock key")
-	ErrTaskCancelled  = errors.New("task cancellation requested")
+	ErrClosed          = errors.New("task scheduler is closed")
+	ErrInvalidLockKey  = errors.New("invalid shared resource lock key")
+	ErrTaskCancelled   = errors.New("task cancellation requested")
 	ErrSchedulerClosed = errors.New("task scheduler is shutting down")
 )
 
