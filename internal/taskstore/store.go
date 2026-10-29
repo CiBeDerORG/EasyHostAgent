@@ -28,35 +28,14 @@ import (
 )
 
 const (
-	SchemaVersion	= 1
-	MaxTaskRequestBytes = 8 << 20
-	MaxLogAppendBytes	= 1 << 20
-	MaxLogChunkBytes	= 256 << 10
-)
-
-var (
-	ErrConflict	= errors.New("task ID already exists with different request")
-	ErrNotFound	= errors.New("task not found")
-	ErrInvalidRequest	= errors.New("invalid task request")
-	ErrInvalidTransition = errors.New("invalid task state transition")
-	ErrInvalidOffset	= errors.New("invalid task log offset")
-	ErrTerminalTask	= errors.New("task is already terminal")
-	uuidPattern	= regexp.MustCompile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-	sha256Pattern	= regexp.MustCompile("^[0-9a-f]{64}$")
-	sha1Pattern	= regexp.MustCompile("^[0-9a-f]{40}$")
-	appIDPattern	= regexp.MustCompile("^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
-)
-
-type Status string
-
-const (
-	StatusAccepted	Status = "accepted"
-	StatusRunning	Status = "running"
-	StatusCancelling	Status = "cancelling"
-	StatusSucceeded	Status = "succeeded"
-	StatusFailed	Status = "failed"
-	StatusCancelled	Status = "cancelled"
+	StatusAccepted    Status = "accepted"
+	StatusRunning     Status = "running"
+	StatusCancelling  Status = "cancelling"
+	StatusSucceeded   Status = "succeeded"
+	StatusFailed      Status = "failed"
+	StatusCancelled   Status = "cancelled"
 	StatusInterrupted Status = "interrupted"
+)
 )
 
 func (s Status) Terminal() bool {
@@ -66,65 +45,65 @@ func (s Status) Terminal() bool {
 // TaskStart mirrors the immutable, client-generated request used for
 // idempotency. Secrets are encrypted and never copied into public Task values.
 type TaskStart struct {
-	TaskID	string	`json:"task_id"`
-	Kind	string	`json:"kind"`
-	Action	string	`json:"action"`
-	ApplicationID	string	`json:"application_id,omitempty"`
-	ResourceID	string	`json:"resource_id,omitempty"`
-	BundleSHA256	string	`json:"bundle_sha256,omitempty"`
-	CatalogRevision string	`json:"catalog_revision,omitempty"`
-	Variant	string	`json:"variant,omitempty"`
-	Parameters	map[string]string `json:"parameters,omitempty"`
-	Secrets	map[string]string `json:"secrets,omitempty"`
-	Options	*TaskOptions	`json:"options,omitempty"`
+	TaskID          string            `json:"task_id"`
+	Kind            string            `json:"kind"`
+	Action          string            `json:"action"`
+	ApplicationID   string            `json:"application_id,omitempty"`
+	ResourceID      string            `json:"resource_id,omitempty"`
+	BundleSHA256    string            `json:"bundle_sha256,omitempty"`
+	CatalogRevision string            `json:"catalog_revision,omitempty"`
+	Variant         string            `json:"variant,omitempty"`
+	Parameters      map[string]string `json:"parameters,omitempty"`
+	Secrets         map[string]string `json:"secrets,omitempty"`
+	Options         *TaskOptions      `json:"options,omitempty"`
 }
 
 type TaskOptions struct {
-	RetainData	*bool `json:"retain_data,omitempty"`
-	ConfirmDeleteData bool	`json:"confirm_delete_data,omitempty"`
-	ReuseExistingData bool	`json:"reuse_existing_data,omitempty"`
+	RetainData        *bool `json:"retain_data,omitempty"`
+	ConfirmDeleteData bool  `json:"confirm_delete_data,omitempty"`
+	ReuseExistingData bool  `json:"reuse_existing_data,omitempty"`
 }
 
 type Task struct {
-	AgentID	string	`json:"agent_id"`
-	TaskID	string	`json:"task_id"`
-	Kind	string	`json:"kind"`
-	Action	string	`json:"action"`
-	ApplicationID string	`json:"application_id,omitempty"`
-	ResourceID	string	`json:"resource_id,omitempty"`
-	Status	Status	`json:"status"`
-	Message	string	`json:"message,omitempty"`
-	ExitCode	*int	`json:"exit_code,omitempty"`
-	CreatedAt	time.Time	`json:"created_at"`
-	UpdatedAt	time.Time	`json:"updated_at"`
-	FinishedAt	*time.Time	`json:"finished_at,omitempty"`
-	LogOffset	int64	`json:"log_offset"`
-	Result	map[string]any `json:"result,omitempty"`
+	AgentID       string         `json:"agent_id"`
+	TaskID        string         `json:"task_id"`
+	Kind          string         `json:"kind"`
+	Action        string         `json:"action"`
+	ApplicationID string         `json:"application_id,omitempty"`
+	ResourceID    string         `json:"resource_id,omitempty"`
+	Status        Status         `json:"status"`
+	Message       string         `json:"message,omitempty"`
+	ExitCode      *int           `json:"exit_code,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	FinishedAt    *time.Time     `json:"finished_at,omitempty"`
+	LogOffset     int64          `json:"log_offset"`
+	Result        map[string]any `json:"result,omitempty"`
 
 	createdAtNS int64
 }
 
 type Page struct {
-	AgentID	string	`json:"agent_id"`
-	Items	[]Task	`json:"items"`
+	AgentID    string  `json:"agent_id"`
+	Items      []Task  `json:"items"`
 	NextCursor *string `json:"next_cursor"`
 }
 
 type LogChunk struct {
-	AgentID	string `json:"agent_id"`
-	TaskID	string `json:"task_id"`
-	Offset	int64	`json:"offset"`
-	NextOffset int64	`json:"next_offset"`
-	Text	string `json:"text"`
-	EOF	bool	`json:"eof"`
-	Truncated	bool	`json:"truncated"`
+	AgentID    string `json:"agent_id"`
+	TaskID     string `json:"task_id"`
+	Offset     int64  `json:"offset"`
+	NextOffset int64  `json:"next_offset"`
+	Text       string `json:"text"`
+	EOF        bool   `json:"eof"`
+	Truncated  bool   `json:"truncated"`
 }
 
 type Store struct {
-	db	*sql.DB
-	key	[]byte
+	db      *sql.DB
+	key     []byte
 	agentID string
-	now	func() time.Time
+	now     func() time.Time
 }
 
 func New(dataDir, agentID string) (*Store, error) {
