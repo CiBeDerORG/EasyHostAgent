@@ -49,6 +49,7 @@ func registerPackages(mux *http.ServeMux, agentID string, pairingStore *pairing.
             }
             return
         }
+        w.Header().Set("Content-Type","application/json; charset=utf-8")
         if !receipt.Reused {w.WriteHeader(http.StatusCreated)}
         sendJSON(w,receipt)
     })))
