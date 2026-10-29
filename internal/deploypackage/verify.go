@@ -59,8 +59,8 @@ type observed struct {
 }
 func validID(id string) bool { return len(id) >= 2 && len(id) <= 64 && appPattern.MatchString(id) }
 func safePath(name string) bool {
-    if name == "" || len(name) > 256 || strings.HasPrefix(name,"/")
-        || strings.ContainsAny(name, "\\\x00\r\n") || path.Clean(name) != name {
+    if name == "" || len(name) > 256 || strings.HasPrefix(name,"/") ||
+        strings.ContainsAny(name, "\\\x00\r\n") || path.Clean(name) != name {
         return false
     }
     parts := strings.Split(name, "/")
