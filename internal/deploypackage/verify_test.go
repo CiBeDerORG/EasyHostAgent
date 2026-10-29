@@ -55,9 +55,14 @@ func makeTar(t *testing.T, entries []testEntry, env Envelope) ([]byte,string) {
     for _,entry:=range all {
         kind:=entry.kind
         if kind==0 {kind=tar.TypeReg}
-        hdr:=&tar.Header{Name:entry.name,Mode:entry.mode,Size:int64(len(entry.data)),Typeflag:kind,Format:tar.FormatUSTAR}
+        size:=int64(len(entry.data))
+        if kind==tar.TypeSymlink {size=0}
+        hdr:=&tar.Header{Name:entry.name,Mode:entry.mode,Size:size,Typeflag:kind,Format:tar.FormatUSTAR}
+        if kind==tar.TypeSymlink {hdr.Linkname="portainer/deploy/install.sh"}
         if err:=writer.WriteHeader(hdr);err!=nil{t.Fatal(err)}
-        if _,err:=writer.Write(entry.data);err!=nil{t.Fatal(err)}
+        if kind!=tar.TypeSymlink {
+            if _,err:=writer.Write(entry.data);err!=nil{t.Fatal(err)}
+        }
     }
     if err:=writer.Close();err!=nil{t.Fatal(err)}
     digest:=sha256.Sum256(buffer.Bytes())
