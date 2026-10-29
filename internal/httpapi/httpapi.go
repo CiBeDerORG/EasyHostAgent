@@ -14,6 +14,7 @@ import (
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/deploypackage"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
@@ -30,6 +31,12 @@ func NewHandlerWithHost(state identity.State, platform, version string, service 
 // NewHandlerWithDocker wires read-only Docker APIs only when a paired store
 // and explicitly configured local Docker Engine are both present.
 func NewHandlerWithDocker(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, stores ...*pairing.Store) http.Handler {
+    return NewHandlerWithPackages(state,platform,version,service,engine,nil,stores...)
+}
+
+// NewHandlerWithPackages stages only SHA-256 verified packages; no execution
+// endpoints are exposed before the M4 task runner is complete.
+func NewHandlerWithPackages(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, packages *deploypackage.Store, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -63,6 +70,9 @@ func NewHandlerWithDocker(state identity.State, platform, version string, servic
 		if engine != nil {
 			registerDocker(mux, state.AgentID, store, engine)
 		}
+        if packages != nil {
+            registerPackages(mux,state.AgentID,store,packages)
+        }
 		mux.HandleFunc("/v1/pairings", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {
 				w.Header().Set("Allow", "POST")
