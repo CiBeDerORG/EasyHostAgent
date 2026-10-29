@@ -684,7 +684,7 @@ func (s *Store) AppendLog(taskID, text string) (int64, error) {
 	}
 	published := clean[:safeLength]
 	tail := clean[safeLength:]
-	var newPending []byte
+	newPending := []byte{}
 	if len(tail) != 0 {
 		newPending, err = s.seal("task-log-pending:"+taskID, tail)
 		if err != nil {
