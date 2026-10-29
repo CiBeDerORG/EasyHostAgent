@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**累计 16/50 项已完成；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 清单/校验代码已提交，真实 Deploy CI 验收仍需核验；T03-04/05 商店、T03-06/07 表单与固定包、T03-08 Agent 收包与 EasyTier 传输接口已提交。Agent Contract Tests [#40810743411](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40810743411) 成功；EasyTier 镜像 CI [#40810348754](https://github.com/CiBeDerORG/EasyTier/actions/runs/40810348754) 成功（对应前一个代码提交，最新提交为文档更新）。T04-01 SQLite 任务存储、状态机、日志脱敏与只读查询接口已提交，新 CI 待核验；FnOS 真机和实际私库拉取仍未执行。**
+> 状态：**累计 16/50 项已完成；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 清单/校验代码已提交，真实 Deploy CI 验收仍需核验；T03-04/05 商店、T03-06/07 表单与固定包、T03-08 Agent 收包与 EasyTier 传输接口已提交。Agent Contract Tests [#40810743411](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40810743411) 成功；EasyTier 镜像 CI [#40810348754](https://github.com/CiBeDerORG/EasyTier/actions/runs/40810348754) 成功（对应前一个代码提交，最新提交为文档更新）。T04-01 SQLite 任务存储与只读查询已提交，依赖校验和日志缓冲修复已补齐；最新 CI [#40838184876](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40838184876) 正在核验。T04-02 并发调度、共享资源锁与安全取消核心已提交，新 CI 待核验；FnOS 真机和实际私库拉取仍未执行。**
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。**后续 M0～M6 开发全部提交到三个仓库统一的 `feat/server-app-lifecycle` 新分支；不再向 `feat/m0-m6`、`feat/automation-center` 或 `main` 直接提交本项目修改。**
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -73,7 +73,7 @@
 | 任务 | 仓库/负责人 | 前置 | 交付与验收 |
 |---|---|---|---|
 | **T04-01 [CODE COMMITTED / CI PENDING]** 本地任务数据库与状态机 | EHA · Go | T01-01,T00-02 | 已提交 SQLite 持久化任务、幂等请求摘要、AES-GCM 请求加密、合法状态转换、退出码/结果/日志游标、跨日志块密钥脱敏；重启将未结束任务标记 `interrupted` 且不自动恢复。只读列表/状态/日志查询已接入；提交/执行接口留待 T04-03。详见 [T04-01 记录](./T04-01-task-store.md)。 |
-| T04-02 多任务并发与取消 | EHA · Go | T04-01 | 不同应用并行、同一应用互斥、全局配置资源加锁；安全取消、保留现场、无自动回滚。 |
+| **T04-02 [CODE COMMITTED / CI PENDING]** 多任务并发与取消 | EHA · Go | T04-01 | 已提交独立 Scheduler：不同应用并行、同应用互斥、Docker 资源按 ID 锁、manifest 可注入共享资源锁；默认并发 4、上限 64；取消通过 context cause 传递，关闭时中断并保留现场，不自动回滚/重放。详见 [T04-02 记录](./T04-02-scheduler.md)。 |
 | T04-03 Deploy 执行器 | EHA · Go | T03-08,T04-01 | 严格按 manifest 允许动作执行脚本/Compose，传参数但不允许前端任意命令；写执行日志、限制超时、控制进程组。 |
 | T04-04 配置文件适配器 | EHA+DEP · Go/脚本 | T03-02,T04-03 | 兼容 Deploy 统一 `.env`/`.secrets`，锁和原子写入、不丢旧用户配置、密钥绝不明文回显；新参数用模板默认值。 |
 | T04-05 安装预检与历史数据选择 | EHA+ET · 后端/前端 | T02-01,T04-04 | Docker/Compose、磁盘、端口、软件根目录与已安装状态；端口冲突要求手改；历史数据可选择复用/全新，原数据不被删除。 |
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：需 M3/M4 或 FnOS 真实验收]**、**T03-01～T03-03 [IN_PROGRESS：Deploy CI job 无步骤失败]**、**T03-04～T03-08 [IN_PROGRESS：跨仓库代码提交，ET 新分支 CI/真实 FnOS 待核验]**，其余 **22 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T03-01～03 代码已提交并接入 CI**；Go/EasyTier T02-07 模拟回归 CI 已通过，但 FnOS 真实联调（含 T01-08）未执行。下一轮先检查 EasyTier 新分支 T03-08 [CI #40810348754](https://github.com/CiBeDerORG/EasyTier/actions/runs/40810348754) 和 Agent 最新 CI；运行中不等待，失败先修复 Rust/前端编译或集成测试；随后进入 M4 T04-01 Agent 持久化任务状态机。Deploy CI #40675601770 仍无步骤即失败，T03-01～03 继续待验证。正式接管及服务/公网映射清理仍等待 M4/M5 归属证明。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：需 M3/M4 或 FnOS 真实验收]**、**T03-01～T03-03 [IN_PROGRESS：Deploy CI job 无步骤失败]**、**T03-04～T03-08 [IN_PROGRESS：跨仓库代码提交，ET 新分支 CI/真实 FnOS 待核验]**，其余 **22 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T03-01～03 代码已提交并接入 CI**；Go/EasyTier T02-07 模拟回归 CI 已通过，但 FnOS 真实联调（含 T01-08）未执行。下一轮先检查 EasyTier 新分支 T03-08 [CI #40810348754](https://github.com/CiBeDerORG/EasyTier/actions/runs/40810348754) 与 Agent 最新 CI；运行中不等待，失败优先修复。T04-01/T04-02 已提交，下一项为 T04-03 Deploy 执行器：接入白名单脚本/Compose 执行、日志/超时/进程组控制，并将提交与取消路由接入 Scheduler。Deploy CI #40675601770 仍无步骤即失败，T03-01～03 继续待验证。正式接管及服务/公网映射清理仍等待 M4/M5 归属证明。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
