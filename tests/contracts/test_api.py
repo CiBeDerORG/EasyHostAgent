@@ -41,7 +41,7 @@ class ApiContractTests(unittest.TestCase):
                     refs = {p.get("$ref") for p in op.get("parameters", [])}
                     self.assertIn("#/components/parameters/AgentId", refs)
                     self.assertIn("#/components/parameters/ControllerId", refs)
-        self.assertEqual(len(ids), 15)
+        self.assertEqual(len(ids), 17)
         self.assertNotIn("/v1/catalog", API["paths"])
 
     def test_documented_json_examples(self):
@@ -82,6 +82,27 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(snapshot["resources"], [])
         authoritative_empty = snapshot["complete"] and snapshot["status"] == "ok" and not snapshot["resources"]
         self.assertFalse(authoritative_empty)
+
+    def test_deploy_package_receipt_contract_is_storage_only(self):
+        payload = {
+            "app_id": "portainer",
+            "git_revision": "a" * 40,
+            "manifest_sha256": "b" * 64,
+            "package_sha256": "c" * 64,
+            "package_size": 1234,
+            "file_count": 3,
+            "stored_at": "2026-10-29T00:00:00Z",
+            "ready_for_agent": False,
+            "install_enabled": False,
+            "reused": False,
+        }
+        validate("DeployPackageReceipt", payload)
+        bad = dict(payload)
+        bad["install_enabled"] = True
+        with self.assertRaises(Exception):
+            validate("DeployPackageReceipt", bad)
+        self.assertIn("/v1/deploy/packages", API["paths"])
+        self.assertIn("/v1/deploy/packages/{app_id}/{git_revision}", API["paths"])
 
     def test_task_allowlist_rejects_shell_and_invalid_pairing(self):
         task = {
