@@ -1,7 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
-> 状态：**开发计划执行中，累计 16/50；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 正式清单/校验代码已提交，Deploy Actions [#40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) Job 无步骤失败。T03-04/05 EasyTier Git 本地商店/事务快照/只读目录 API/搜索详情 Vue 已提交，Rust/Web CI 及实际私有 Git 刷新待核验；八项进行中、独立真机阻塞，不虚报已完成。**
+> 状态：**开发计划执行中，累计 16/50；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 正式清单/校验代码已提交，Deploy Actions [#40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) Job 无步骤失败。T03-04/05 EasyTier 本地 Git 商店、事务快照、只读 API 与页面已提交；T03-06/07 动态配置表单、严格 YAML 清单校验、固定提交包打包及 SHA-256 回归也已提交，最新 Rust/Web CI 尚待核验，真实私有 Git/FnOS 联调未完成；十项进行中、独立真机阻塞，不虚报已完成。**
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
 > 核心约束：**只支持首期 Docker / Compose 应用；无心跳；Deploy 仅由 ET 在手动刷新时本地 git pull；Agent 不拉 Git；无自动回滚；失败保留现场。**
 > 实施模式：按编号顺序进行，每项尽量对应一个小 PR/提交、单独验收。多仓库功能由集成任务收尾；不得只改 Agent 或只改界面就宣称业务完成。
@@ -64,8 +64,8 @@
 | **T03-03 [IN_PROGRESS：正式清单已提交，Deploy CI 阻塞]** 为 Sub2API 增加 app.yaml | DEP · 运维 | T03-01 | [sub2api/app.yaml](https://github.com/CiBeDerORG/deploy/blob/main/sub2api/app.yaml) 已发布为正式目录清单；声明 API+PostgreSQL+Redis 三服务、健康检查、单一 Web 入口、共享 .env/.secrets、自动生成密钥、保留数据与脚本/镜像源依赖，旧 CLI 不变；[交付记录](https://github.com/CiBeDerORG/deploy/blob/main/docs/T03-03-sub2api-manifest.md)。CI 尚未启动任何步骤。 |
 | **T03-04 [IN_PROGRESS：本地 Git 工作副本与事务性快照已提交，CI/真实授权尚待核验]** 本地 Deploy 商店工作副本 | ET · Rust | T00-03 | EasyTier 后端固定只读 `CiBeDerORG/deploy:main`，管理员手动 POST 才 git clone，token 仅走子进程环境变量；隔离临时工作副本、固定 SHA、旧版本保留、SQLite 原子替换、失败保留旧索引，未配置 token 不会自动尝试；镜像增加 Git。见 [T03-04/05](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T03-04-05-deploy-store.md)。 |
 | **T03-05 [IN_PROGRESS：目录 API、Vue 页面及 CI 脚本已提交，CI 待核验]** 商店目录 API 与页面 | ET · Rust/Vue | T03-04 | 新增 `GET /api/v1/deploy/catalog`、`GET /api/v1/deploy/catalog/{id}`、管理员 `POST /api/v1/deploy/catalog/refresh`；`/#/h/store` 独立菜单支持分类搜索、详情、脚本策略、配置定义、端口、固定 Revision/SHA-256。全站不做自动 Git/Agent 请求，不授予安装/接管权限；见 [文档](https://github.com/CiBeDerORG/EasyTier/blob/feat/automation-center/docs/T03-04-05-deploy-store.md)。 |
-| T03-06 动态安装表单 | ET · Vue | T03-05 | 从 manifest 生成端口、常规变量和密钥输入；不暴露隐藏密钥；目标主机兼容性提示。 |
-| T03-07 固定版本部署包生成 | ET · Rust | T03-01/04 | 只打包目标应用的必要 Deploy 资源及公共依赖，保存来源 commit+SHA-256，过滤数据/密钥/非法文件；不要求 Agent 拥有 Git 权限。 |
+| **T03-06 [IN_PROGRESS：表单与本地校验已提交，CI 待核验]** 动态安装表单 | ET · Vue | T03-05 | 从严格解析的 manifest 动态生成 string/number/boolean/port/IPv4/secret 字段；支持 required、长度、数值范围、IPv4 校验；密钥永不预填，值仅留在页面内存，表单值不发送给包生成 API；实际安装保持禁用。
+| **T03-07 [IN_PROGRESS：固定版本 tar 包、文件 SHA-256、严格清单/Compose 校验与集成测试已提交，CI 待核验]** 固定版本部署包生成 | ET · Rust | T03-01/04 | 仅从与目录 SHA 一致且 Git working tree 干净的不可变 checkout 生成包；拒绝重复/未知 YAML 字段、别名/锚点、路径穿越、软链接、超限文件、缺失脚本、Compose 项目/端口/数据挂载不匹配；包内保存 manifest、bundle.json 与逐文件 SHA-256，按 app+commit 缓存；不执行安装、不含 `.env`/`.secrets` 值、不要求 Agent 拥有 Git 权限。
 | T03-08 Agent 部署包接收与校验 | EHA · Go | T03-07,T01-03 | 限制大小/路径/内容，验证摘要、授权和允许的动作；安全保存原始部署包供应用下架后的受管实例使用。 |
 
 ## 5. M4：安装任务与服务自动关联（8 项）
@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：需 M3/M4 或 FnOS 真实验收]**、**T03-01～T03-03 [IN_PROGRESS：Deploy CI job 无步骤失败]**、**T03-04/T03-05 [IN_PROGRESS：代码已提交，EasyTier CI/私有 Git 真实刷新待核验]**，其余 **25 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T03-01～03 代码已提交并接入 CI**；Go/EasyTier T02-07 模拟回归 CI 已通过，但 FnOS 真实联调（含 T01-08）未执行。下一轮先检查 EasyTier 最新 T03-04/05 的 GitHub Actions，失败优先修复；若通过或仍运行，继续 T03-06 动态安装表单（未具固定版本验证前禁用实际安装）。Deploy CI #40675601770 仍无步骤即失败，T03-01～03 继续待验证。正式接管及服务/公网映射清理仍等待 M4/M5 归属证明。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：需 M3/M4 或 FnOS 真实验收]**、**T03-01～T03-03 [IN_PROGRESS：Deploy CI job 无步骤失败]**、**T03-04/T03-05 [IN_PROGRESS：代码已提交，EasyTier CI/私有 Git 真实刷新待核验]**，其余 **25 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T03-01～03 代码已提交并接入 CI**；Go/EasyTier T02-07 模拟回归 CI 已通过，但 FnOS 真实联调（含 T01-08）未执行。下一轮先检查 EasyTier 最新 T03-06/07 CI；排队/执行中继续开发，失败先修复 Rust/前端编译或集成测试；通过后继续 T03-08 Agent 部署包接收与校验。Deploy CI #40675601770 仍无步骤即失败，T03-01～03 继续待验证。正式接管及服务/公网映射清理仍等待 M4/M5 归属证明。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
