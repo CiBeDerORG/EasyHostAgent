@@ -109,7 +109,7 @@
 
 ## 8. 任务跟踪规范
 
-每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：需 M3/M4 或 FnOS 真实验收]**、**T03-01～T03-03 [IN_PROGRESS：Deploy CI job 无步骤失败]**、**T03-04/T03-05 [IN_PROGRESS：代码已提交，EasyTier CI/私有 Git 真实刷新待核验]**，其余 **25 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T03-01～03 代码已提交并接入 CI**；Go/EasyTier T02-07 模拟回归 CI 已通过，但 FnOS 真实联调（含 T01-08）未执行。下一轮先检查 EasyTier 最新 T03-06/07 CI；排队/执行中继续开发，失败先修复 Rust/前端编译或集成测试；通过后继续 T03-08 Agent 部署包接收与校验。Deploy CI #40675601770 仍无步骤即失败，T03-01～03 继续待验证。正式接管及服务/公网映射清理仍等待 M4/M5 归属证明。
+每项用统一状态：`TODO` / `IN_PROGRESS` / `BLOCKED` / `DONE`；截至 2026-10-28：**T00-01～T00-05、T01-01～T01-07 [DONE]**（共 12 项），**T01-08 [BLOCKED：FnOS 真机]**，**T02-01～T02-03/T02-05 [DONE，CI 成功]**、**T02-04/T02-06/T02-07 [IN_PROGRESS：需 M3/M4 或 FnOS 真实验收]**、**T03-01～T03-03 [IN_PROGRESS：Deploy CI job 无步骤失败]**、**T03-04/T03-05 [IN_PROGRESS：代码已提交，EasyTier CI/私有 Git 真实刷新待核验]**，其余 **23 项 [TODO]**。**遗留验收：T01-05 专项 REST 用例未执行、主镜像完整打包待完成，Deploy workflow 无步骤失败需补测**。当前任务 **T03-01～03 代码已提交并接入 CI**；Go/EasyTier T02-07 模拟回归 CI 已通过，但 FnOS 真实联调（含 T01-08）未执行。下一轮先检查 EasyTier 最新 T03-06/07 CI；排队/执行中继续开发，失败先修复 Rust/前端编译或集成测试；通过后继续 T03-08 Agent 部署包接收与校验。Deploy CI #40675601770 仍无步骤即失败，T03-01～03 继续待验证。正式接管及服务/公网映射清理仍等待 M4/M5 归属证明。
 
 执行每项时留下：
 1. 需求 ID 与任务 ID；
