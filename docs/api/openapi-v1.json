@@ -1161,6 +1161,162 @@
           }
         }
       }
+    },
+    "/v1/deploy/packages": {
+      "post": {
+        "tags": [
+          "Agent"
+        ],
+        "operationId": "stageVerifiedDeployPackage",
+        "summary": "Stage an immutable pinned Deploy archive; never executes bundled scripts",
+        "description": "Paired-controller-only raw tar upload. Validate package/manifest/per-file hashes and allowlisted action strategies; retain original archive. SHA-256 is an integrity check, not a digital signature.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "name": "X-EHA-Package-SHA256",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-tar": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Previously verified immutable bundle (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeployPackageReceipt"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Verified and durably staged immutable bundle; not installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeployPackageReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/deploy/packages/{app_id}/{git_revision}": {
+      "get": {
+        "tags": [
+          "Agent"
+        ],
+        "operationId": "getVerifiedDeployPackageReceipt",
+        "summary": "Read metadata for a retained pinned package (not installation state)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          },
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          {
+            "name": "git_revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Previously verified immutable bundle (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeployPackageReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2027,6 +2183,67 @@
           "truncated"
         ],
         "additionalProperties": false
+      },
+      "DeployPackageReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "app_id",
+          "git_revision",
+          "manifest_sha256",
+          "package_sha256",
+          "package_size",
+          "file_count",
+          "stored_at",
+          "ready_for_agent",
+          "install_enabled",
+          "reused"
+        ],
+        "properties": {
+          "app_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "minLength": 2,
+            "maxLength": 64
+          },
+          "git_revision": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "manifest_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "package_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "package_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 27262976
+          },
+          "file_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 128
+          },
+          "stored_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ready_for_agent": {
+            "const": false,
+            "type": "boolean"
+          },
+          "install_enabled": {
+            "const": false,
+            "type": "boolean"
+          },
+          "reused": {
+            "type": "boolean"
+          }
+        }
       }
     },
     "responses": {
