@@ -23,10 +23,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Bootstrap formatting for immutable bundle changes
-        run: |
-          gofmt -w internal/bundles/*.go internal/httpapi/bundle_routes.go internal/httpapi/bundle_routes_test.go internal/httpapi/httpapi.go internal/app/app.go
-          python3 -c 'import base64; from pathlib import Path; ps=[*sorted(Path("internal/bundles").glob("*.go")),Path("internal/httpapi/bundle_routes.go"),Path("internal/httpapi/bundle_routes_test.go"),Path("internal/httpapi/httpapi.go"),Path("internal/app/app.go")]; [print("EHA_EXPORT_BASE64="+str(p)+"|"+base64.b64encode(p.read_bytes()).decode("ascii")) for p in ps]'
       - name: Check gofmt
         run: test -z "$(gofmt -l cmd internal)"
       - name: Run go vet
