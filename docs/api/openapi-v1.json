@@ -2206,7 +2206,7 @@
   },
   "x-eha-contract-notes": {
     "transport": "HTTPS mandatory. Pin SPKI SHA256 against locally shown fingerprint before any unauthenticated pairing. Do not disable verification, redirect or use ambient proxy; verify stable agent_id in response/header for authenticated requests.",
-    "binding": "EasyTier browser calls EasyTier Rust backend with existing user session. Only Rust backend calls this API. Client must send X-EHA-Controller-ID (controller UUID) and X-EHA-Agent-ID (expected UUID) for authenticated requests; agent validates token/controller/device binding. EasyTier validates returned agent_id, including after IP changes. Header fields are declared for every protected operation under components.parameters; the controller cannot gain authority merely by spoofing an ID without the paired token.",
+    "binding": "Browser calls EasyNetTopo backend with authenticated user session; only the backend calls the Agent. Send X-EHA-Controller-ID and X-EHA-Agent-ID with Bearer token. The Agent validates token + paired controller + agent identity. The pairing device_id field denotes stable EasyNetTopo host_id in V1; do not treat it as EasyTier-only. Successful re-pair atomically replaces the previous controller grant.",
     "limits": {
       "connect_timeout_seconds": 3,
       "default_request_timeout_seconds": 15,
@@ -2221,7 +2221,8 @@
     },
     "behavior": "HTTP tasks return immediately and persist locally; no automated task polling when page is closed, no lost-request auto retry without same task_id, no automatic cleanup/rollback after errors.",
     "inventory": "complete=false or Docker provider error is never evidence of deleted applications. Stopped resources still exist.",
-    "controller_reconciliation": "EasyTier alone owns app templates, service creation/deletion, public mappings, store Git pull and authorization of admin vs own devices. Failure of service binding is stored as separately retryable state; never remove an otherwise successful Docker install.",
-    "agent_restart": "Previously running operations are recorded as interrupted/failed with logs retained; do not auto retry or rollback."
+    "controller_reconciliation": "EasyNetTopo owns catalog sources, host/instance records, user permissions and task indexes; Agent owns actual local Docker inventory and execution state. It is invalid to infer deletion when Docker inventory is incomplete or unavailable. App integrations are independent from app installations.",
+    "agent_restart": "Previously running operations are recorded as interrupted/failed with logs retained; do not auto retry or rollback.",
+    "application_source_security": "source_id is a controller-issued UUID identifying the catalog source, not an authority claim. Execution of script bundles requires independent host-local approval of immutable content or verified publisher signature and allowlisted actions. Untrusted Compose is constrained separately. Neither source_id nor SHA-256 alone proves a package is trusted."
   }
 }
