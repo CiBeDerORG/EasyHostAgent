@@ -38,7 +38,11 @@ func digestOf(data []byte) string {
 }
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	s, err := New(t.TempDir())
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(dir)
 	if err != nil { t.Fatal(err) }
 	return s
 }
