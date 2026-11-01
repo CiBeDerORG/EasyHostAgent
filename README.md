@@ -1,8 +1,8 @@
 # EasyHostAgent
 
-EasyHostAgent 是 EasyTier 的 Go 原生主机执行代理。该仓库目前处于 **T01-04 一次性配对与持久授权完成阶段**，首期目标为 Linux / FnOS 上的 Docker / Docker Compose 管理。
+EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机代理。**EasyNetTopo V1.0 是首个正式对接控制端**；一台 Agent 同时只允许一个有效控制端授权，成功重新配对会撤销旧授权。Agent 不依赖 EasyTier 组网，可以通过直接可达的 IP:port + HTTPS 管理。
 
-> **注意：当前版本已实现 TLS 身份发现、一次性本地配对码和控制端 Token 授权，但 EasyTier 页面配对尚未集成，不提供 Docker 或应用安装 API。不能当成完整可用的管理 Agent。**
+> **当前实际能力（M3-01 分支）**：已实现 TLS 身份发现、一次性配对与控制端 Token、主机资源与 Docker/Compose **只读**查询，以及受授权、固定 SHA-256 的 ZIP Bundle **上传/缓存**。尚未实现 Bundle 执行、持久化应用任务、安装/更新/卸载 API，**不能当作完整的应用执行代理**。下文 T01/T02 等部分阶段说明仍为历史开发记录；实时功能范围以实际 API/测试及 [M3 部署包说明](docs/m3-immutable-bundles.md) 为准。
 
 ## 工程结构
 
