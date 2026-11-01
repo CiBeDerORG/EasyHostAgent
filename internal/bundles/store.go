@@ -23,6 +23,7 @@ const (
 	maxExpandedSize uint64 = 256 << 20
 	maxFiles               = 1024
 )
+
 var (
 	ErrInvalidDigest  = errors.New("invalid SHA-256 digest")
 	ErrDigestMismatch = errors.New("bundle digest mismatch")
@@ -36,6 +37,7 @@ var filePartPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 type Store struct {
 	dir string
 }
+
 func New(dataDir string) (*Store, error) {
 	if !filepath.IsAbs(dataDir) || filepath.Clean(dataDir) == "/" {
 		return nil, errors.New("bundle data directory must be private and absolute")
@@ -96,6 +98,7 @@ func (s *Store) verifyStored(digest string) (bool, int64, error) {
 	}
 	return true, n, nil
 }
+
 // Has never treats corrupted, substituted or symlinked cached content as present.
 func (s *Store) Has(digest string) (bool, int64, error) {
 	return s.verifyStored(digest)
@@ -105,7 +108,7 @@ func safeName(value string) bool {
 	if value == "" || len(value) > 256 || strings.ContainsAny(value, "\\\x00:\r\n") {
 		return false
 	}
-	for _,part := range strings.Split(value,"/") {
+	for _, part := range strings.Split(value, "/") {
 		if part == "" || part == "." || part == ".." || !filePartPattern.MatchString(part) ||
 			strings.HasPrefix(part, ".") || part == "data" || part == "runtime" ||
 			part == ".env" || part == ".secrets" {
@@ -114,6 +117,7 @@ func safeName(value string) bool {
 	}
 	return true
 }
+
 // ValidateZIP inspects filenames, file types, sizes and CRC through bounded
 // decompression, and never extracts any file onto the host filesystem.
 func ValidateZIP(path string) error {
@@ -128,14 +132,14 @@ func ValidateZIP(path string) error {
 	seen := make(map[string]bool, len(reader.File))
 	var total uint64
 	var regular int
-	for _,f := range reader.File {
-		name := strings.TrimSuffix(f.Name,"/")
+	for _, f := range reader.File {
+		name := strings.TrimSuffix(f.Name, "/")
 		if !safeName(name) || seen[strings.ToLower(name)] {
 			return ErrInvalidArchive
 		}
 		seen[strings.ToLower(name)] = true
 		mode := f.Mode()
-		if strings.HasSuffix(f.Name,"/") {
+		if strings.HasSuffix(f.Name, "/") {
 			if !mode.IsDir() {
 				return ErrInvalidArchive
 			}
@@ -188,15 +192,15 @@ func (s *Store) Put(ctx context.Context, digest string, body io.Reader) (int64, 
 		return 0, false, err
 	}
 	hash := sha256.New()
-	n, copyErr := io.CopyN(io.MultiWriter(temp,hash), body, MaxBundleSize+1)
+	n, copyErr := io.CopyN(io.MultiWriter(temp, hash), body, MaxBundleSize+1)
 	if n > MaxBundleSize {
 		return 0, false, ErrTooLarge
 	}
 	var tooBig *http.MaxBytesError
-	if errors.As(copyErr,&tooBig) {
+	if errors.As(copyErr, &tooBig) {
 		return 0, false, ErrTooLarge
 	}
-	if copyErr != nil && !errors.Is(copyErr,io.EOF) {
+	if copyErr != nil && !errors.Is(copyErr, io.EOF) {
 		return 0, false, copyErr
 	}
 	if n == 0 || hex.EncodeToString(hash.Sum(nil)) != digest {
@@ -215,14 +219,18 @@ func (s *Store) Put(ctx context.Context, digest string, body io.Reader) (int64, 
 		return 0, false, err
 	}
 	if err := os.Link(temp.Name(), target); err != nil {
-		if errors.Is(err,os.ErrExist) {
+		if errors.Is(err, os.ErrExist) {
 			ok, existingSize, verifyErr := s.verifyStored(digest)
-			if verifyErr != nil { return 0,false,verifyErr }
-			if ok { return existingSize,true,nil }
+			if verifyErr != nil {
+				return 0, false, verifyErr
+			}
+			if ok {
+				return existingSize, true, nil
+			}
 		}
 		return 0, false, err
 	}
-	if d,err:=os.Open(s.dir);err==nil {
+	if d, err := os.Open(s.dir); err == nil {
 		_ = d.Sync()
 		_ = d.Close()
 	}
