@@ -86,10 +86,49 @@ class ApiContractTests(unittest.TestCase):
     def test_task_allowlist_rejects_shell_and_invalid_pairing(self):
         task = {
             "task_id": "44444444-4444-4444-8444-444444444444",
-            "kind": "application", "action": "install", "application_id": "portainer",
-            "bundle_sha256": "b" * 64,
+            "kind": "application", "action": "install",
+            "source_id": "55555555-5555-4555-8555-555555555555",
+            "application_id": "portainer", "bundle_sha256": "b" * 64,
         }
         validate("TaskStart", task)
+        missing_source = copy.deepcopy(task)
+        missing_source.pop("source_id")
+        with self.assertRaises(Exception):
+            validate("TaskStart", missing_source)
+        invalid_source = copy.deepcopy(task)
+        invalid_source["source_id"] = "official-deploy"
+        with self.assertRaises(Exception):
+            validate("TaskStart", invalid_source)
+        no_app = copy.deepcopy(task)
+        no_app.pop("application_id")
+        with self.assertRaises(Exception):
+            validate("TaskStart", no_app)
+        spoofed_trust = copy.deepcopy(task)
+        spoofed_trust["trusted"] = True
+        with self.assertRaises(Exception):
+            validate("TaskStart", spoofed_trust)
+        container_action = {
+            "task_id": task["task_id"], "kind": "docker_resource",
+            "action": "restart", "resource_id": "compose:sub2api",
+        }
+        validate("TaskStart", container_action)
+        validate("Task", {
+            "agent_id": "11111111-1111-4111-8111-111111111111",
+            "task_id": task["task_id"], "kind": "application",
+            "action": "install", "source_id": task["source_id"],
+            "application_id": task["application_id"], "status": "accepted",
+            "created_at": "2026-10-27T00:03:00Z",
+            "updated_at": "2026-10-27T00:03:00Z", "log_offset": 0,
+        })
+        missing_result_source = {
+            "agent_id": "11111111-1111-4111-8111-111111111111",
+            "task_id": task["task_id"], "kind": "application",
+            "action": "install", "application_id": task["application_id"],
+            "status": "accepted", "created_at": "2026-10-27T00:03:00Z",
+            "updated_at": "2026-10-27T00:03:00Z", "log_offset": 0,
+        }
+        with self.assertRaises(Exception):
+            validate("Task", missing_result_source)
         bad = copy.deepcopy(task)
         bad["action"] = "run_shell"
         with self.assertRaises(Exception):
