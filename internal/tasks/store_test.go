@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -224,7 +225,7 @@ func TestConcurrentSubmissionsCannotDoubleReserveApplication(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			req := input(env.digest)
-			req.RequestID = "aaaaaaa" + string('0'+byte(i)) + "-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+			req.RequestID = fmt.Sprintf("aaaaaaa%d-aaaa-4aaa-8aaa-aaaaaaaaaaaa", i)
 			task, _, err := env.tasks.Submit(controllerID, env.token, req)
 			if err == nil {
 				success <- task
