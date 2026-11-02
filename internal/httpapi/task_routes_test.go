@@ -141,11 +141,11 @@ func TestHTTPSPreparedTaskLifecycleAndAuth(t *testing.T) {
 		return res, response
 	}
 	body := `{"request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","action":"install","bundle_sha256":"` + digest + `"}`
-	res, _ := call("POST", "/v1/tasks", body, false)
+	res, _ := call("POST", "/v1/task-preparations", body, false)
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatal("未配对控制中心提交了任务")
 	}
-	res, created := call("POST", "/v1/tasks", body, true)
+	res, created := call("POST", "/v1/task-preparations", body, true)
 	if res.StatusCode != http.StatusCreated || created["execution_enabled"] != false {
 		t.Fatalf("任务准备错误: %d %+v", res.StatusCode, created)
 	}
@@ -157,32 +157,32 @@ func TestHTTPSPreparedTaskLifecycleAndAuth(t *testing.T) {
 	if !ok || id == "" {
 		t.Fatal("没有持久任务 ID")
 	}
-	res, replay := call("POST", "/v1/tasks", body, true)
+	res, replay := call("POST", "/v1/task-preparations", body, true)
 	if res.StatusCode != http.StatusOK || replay["idempotent_replay"] != true {
 		t.Fatalf("相同请求不幂等: %d %+v", res.StatusCode, replay)
 	}
 	changed := strings.Replace(body, "install", "update", 1)
-	res, _ = call("POST", "/v1/tasks", changed, true)
+	res, _ = call("POST", "/v1/task-preparations", changed, true)
 	if res.StatusCode != http.StatusConflict {
 		t.Fatal("同一幂等键不同操作未拒绝")
 	}
-	res, _ = call("GET", "/v1/tasks/"+id, "", true)
+	res, _ = call("GET", "/v1/task-preparations/"+id, "", true)
 	if res.StatusCode != http.StatusOK {
 		t.Fatal("已创建的任务无法查询")
 	}
-	res, _ = call("GET", "/v1/tasks", "", true)
+	res, _ = call("GET", "/v1/task-preparations", "", true)
 	if res.StatusCode != http.StatusOK {
 		t.Fatal("任务列表无法查询")
 	}
-	res, _ = call("POST", "/v1/tasks/"+id, "", true)
+	res, _ = call("POST", "/v1/task-preparations/"+id, "", true)
 	if res.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatal("意外开放了任务执行路由")
 	}
-	res, cancelled := call("DELETE", "/v1/tasks/"+id, "", true)
+	res, cancelled := call("DELETE", "/v1/task-preparations/"+id, "", true)
 	if res.StatusCode != http.StatusOK || cancelled["task"].(map[string]any)["status"] != tasks.Cancelled {
 		t.Fatalf("任务取消失败: %d %+v", res.StatusCode, cancelled)
 	}
-	res, _ = call("GET", "/v1/tasks/"+id, "", false)
+	res, _ = call("GET", "/v1/task-preparations/"+id, "", false)
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatal("匿名用户读取了任务记录")
 	}
