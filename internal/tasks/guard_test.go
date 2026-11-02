@@ -3,8 +3,8 @@ package tasks
 import (
 	"bytes"
 	"context"
-	"os"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
