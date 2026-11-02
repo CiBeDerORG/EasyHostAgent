@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -285,6 +286,13 @@ func (s *Store) Submit(controllerID, token string, in Input) (Task, bool, error)
 		for _, task := range all {
 			if task.Status != Prepared {
 				continue
+			}
+			if s.guard != nil {
+				// 历史预留也属于不可信磁盘记录，不能用可被修改的指纹绕过跨应用锁。
+				actual, err := s.guard.claims(task.BundleSHA256, task.ApplicationID)
+				if err != nil || !reflect.DeepEqual(actual, task.Footprint) {
+					return ErrCorrupt
+				}
 			}
 			if task.ApplicationID == approval.ApplicationID ||
 				(s.guard != nil && claimsConflict(claims, task.Footprint)) {
