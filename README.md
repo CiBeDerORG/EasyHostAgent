@@ -146,16 +146,8 @@ FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-rele
 
 配置校验仅读取参数，不会创建目录、修改文件或运行 Docker。身份命令首次调用时会写入本地受保护的状态；配对码仅经本地 CLI 显示。日志使用 JSON Lines，标准输出由 systemd/journald 收集。
 
-## 任务路线
+## 历史计划说明
 
-- **T01-01**：Go 工程骨架、配置、日志、构建与单元测试。
-- **T01-02（完成）**：FnOS/Linux 安装脚本和 systemd unit（实机验收仍需目标机器）。
-- **T01-03（已完成）**：持久 Agent 身份、TLS 1.3 HTTPS 身份发现及默认拒绝的授权中间件；[测试与双架构 CI 通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40427223740)。
-- **T01-04（完成）**：一次性配对码、持久控制端授权与撤销；[CI 已通过](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)。
-- **T01-05 / T01-06**：EasyTier 服务器设备入口与 Rust 端绑定集成。
-- **T02**：Docker 基础管理。
-- **T03/T04**：中央 Deploy 部署包、应用管理任务。
-
-所有业务规则见 [需求基线](docs/requirements-plan.md) 与 [任务计划](docs/task-plan.md)。
+此前依据 EasyTier 集成路线编写的需求计划和任务计划已经撤销，不再作为当前开发依据。项目实际能力与实现边界以当前 `main` 的 Go 源码、API 和已保留的 M3 技术文档为准；新的 Docker 应用安装、卸载与状态查询需求须重新确认后建档。
 
 本项目不采用心跳，不由 Agent 克隆私有 Deploy 仓库，不实现自动回滚。失败保留现场和日志。
