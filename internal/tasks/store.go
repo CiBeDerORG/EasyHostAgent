@@ -44,23 +44,23 @@ type Input struct {
 }
 
 type Task struct {
-	Footprint Footprint `json:"footprint"`
-	ID               string `json:"id"`
-	AgentID          string `json:"agent_id"`
-	ControllerID     string `json:"controller_id"`
-	DeviceID         string `json:"device_id"`
-	GrantAt          string `json:"grant_at"`
-	RequestID        string `json:"request_id"`
-	Action           string `json:"action"`
-	BundleSHA256     string `json:"bundle_sha256"`
-	SourceID         string `json:"source_id"`
-	ApplicationID    string `json:"application_id"`
-	GitRevision      string `json:"git_revision"`
-	ManifestSHA256   string `json:"manifest_sha256"`
-	Status           string `json:"status"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
-	ExecutionEnabled bool   `json:"execution_enabled"`
+	Footprint        Footprint `json:"footprint"`
+	ID               string    `json:"id"`
+	AgentID          string    `json:"agent_id"`
+	ControllerID     string    `json:"controller_id"`
+	DeviceID         string    `json:"device_id"`
+	GrantAt          string    `json:"grant_at"`
+	RequestID        string    `json:"request_id"`
+	Action           string    `json:"action"`
+	BundleSHA256     string    `json:"bundle_sha256"`
+	SourceID         string    `json:"source_id"`
+	ApplicationID    string    `json:"application_id"`
+	GitRevision      string    `json:"git_revision"`
+	ManifestSHA256   string    `json:"manifest_sha256"`
+	Status           string    `json:"status"`
+	CreatedAt        string    `json:"created_at"`
+	UpdatedAt        string    `json:"updated_at"`
+	ExecutionEnabled bool      `json:"execution_enabled"`
 }
 
 type Store struct {
