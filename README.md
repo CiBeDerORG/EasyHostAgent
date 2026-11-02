@@ -2,7 +2,7 @@
 
 EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机代理。**EasyNetTopo V1.0 是首个正式对接控制端**；一台 Agent 同时只允许一个有效控制端授权，成功重新配对会撤销旧授权。Agent 不依赖 EasyTier 组网，可以通过直接可达的 IP:port + HTTPS 管理。
 
-> **当前实际能力（M3-01 分支）**：已实现 TLS 身份发现、一次性配对与控制端 Token、主机资源与 Docker/Compose **只读**查询，以及受授权、固定 SHA-256 的 ZIP Bundle **上传/缓存**。尚未实现 Bundle 执行、持久化应用任务、安装/更新/卸载 API，**不能当作完整的应用执行代理**。下文 T01/T02 等部分阶段说明仍为历史开发记录；实时功能范围以实际 API/测试及 [M3 部署包说明](docs/m3-immutable-bundles.md) 为准。
+支持 HTTPS 身份配对、Docker/Compose 资源发现和按摘要缓存应用包。主机管理员授权指定应用源后，控制端可安装、卸载并批量查询 Docker 应用。详见本文「Docker 应用商店」。下文 T01/T02 和 M3 章节保留各阶段的开发记录。
 
 ## 工程结构
 
@@ -148,6 +148,14 @@ FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-rele
 
 ## 历史计划说明
 
-此前依据 EasyTier 集成路线编写的需求计划和任务计划已经撤销，不再作为当前开发依据。项目实际能力与实现边界以当前 `main` 的 Go 源码、API 和已保留的 M3 技术文档为准；新的 Docker 应用安装、卸载与状态查询需求须重新确认后建档。
+此前依据 EasyTier 集成路线编写的需求计划和任务计划已经撤销。M3 文档记录了安装包缓存阶段，当前商店操作见下节。
 
-本项目不采用心跳，不由 Agent 克隆私有 Deploy 仓库，不实现自动回滚。失败保留现场和日志。
+应用源由 EasyNetTopo 拉取，Agent 按需执行并保留失败现场。
+
+## Docker 应用商店
+
+配对后，管理员从 EasyNetTopo 页面核对控制端 ID 和 Git 来源 ID，在主机的 `/etc/easyhostagent/agent.env` 设置 `EASYHOSTAGENT_APP_GRANTS=<控制端UUID>/<来源UUID>`，然后重启 Agent。多个授权用逗号分隔。移除授权并重启即停止接受该来源的新操作。未设置时仍可查询状态。授权意味着信任该控制端为指定来源选择和传送脚本，脚本以 Agent 服务用户身份执行。
+
+控制端通过已配对的 HTTPS 连接调用 `POST /v1/apps/install`、`uninstall`、`status`（三个接口共用 `/v1/apps/` 前缀）。安装传 `source_id`、`app_id`、`bundle_sha256` 和清单允许的 `config`；卸载只传前两项。批量查询传 `{"apps":[{"source_id":"…","app_id":"…"}],"include_managed":true}`。动作受理后返回当前结果，后续查询同时获得执行结果和 Docker 运行状态。每台主机同时执行一个应用操作。
+
+每个应用使用独立的软件根目录 `<SOFTWARE_ROOT>/.easyhostagent-apps/<来源UUID>/<应用ID>/`。该目录下的 `deploy/.env` 和 `deploy/.secrets` 保存普通配置和密钥，卸载保留配置和应用数据。软件根目录及上级须防止被其他用户替换。脚本应按字面量读取这两份配置，每行 `KEY=VALUE`，读取时去除一层成对引号；禁止把配置作为 Shell 代码执行。包内脚本输出可能包含初始密码，接口仅返回结果与退出码。

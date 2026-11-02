@@ -17,6 +17,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
@@ -35,6 +36,10 @@ func NewHandlerWithDocker(state identity.State, platform, version string, servic
 }
 
 func NewHandlerWithBundles(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithMarket(state, platform, version, service, engine, cache, nil, stores...)
+}
+
+func NewHandlerWithMarket(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -62,6 +67,9 @@ func NewHandlerWithBundles(state identity.State, platform, version string, servi
 	// Production must pass a persistent store.
 	if len(stores) != 0 && stores[0] != nil {
 		store := stores[0]
+		if apps != nil {
+			registerMarket(mux, state.AgentID, store, apps)
+		}
 		if service != nil {
 			registerHost(mux, state.AgentID, store, service)
 		}

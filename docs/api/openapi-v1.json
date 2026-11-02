@@ -31,6 +31,171 @@
     }
   ],
   "paths": {
+    "/v1/apps/install": {
+      "post": {
+        "operationId": "installMarketApp",
+        "summary": "在目标主机执行应用安装动作",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketInstall"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "当前结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          }
+        }
+      }
+    },
+    "/v1/apps/uninstall": {
+      "post": {
+        "operationId": "uninstallMarketApp",
+        "summary": "按本机安装记录执行卸载",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketApp"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "当前结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          }
+        }
+      }
+    },
+    "/v1/apps/status": {
+      "post": {
+        "operationId": "getMarketAppStatuses",
+        "summary": "批量返回操作结果及实时 Docker 状态",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          },
+          {
+            "$ref": "#/components/parameters/ControllerId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "当前结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "apps": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MarketStatus"
+                      }
+                    }
+                  },
+                  "required": [
+                    "apps"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
@@ -1173,6 +1338,154 @@
       }
     },
     "schemas": {
+      "MarketApp": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "app_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "source_id",
+          "app_id"
+        ]
+      },
+      "MarketInstall": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "app_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "maxLength": 64
+          },
+          "bundle_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source_id",
+          "app_id",
+          "bundle_sha256"
+        ]
+      },
+      "MarketQuery": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "apps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketApp"
+            },
+            "maxItems": 256
+          },
+          "include_managed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "apps"
+        ]
+      },
+      "MarketResult": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "app_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "maxLength": 64
+          },
+          "bundle_sha256": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "install",
+              "uninstall"
+            ]
+          },
+          "result": {
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "unknown"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "source_id",
+          "app_id",
+          "managed"
+        ]
+      },
+      "MarketStatus": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MarketResult"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "enum": [
+                  "running",
+                  "stopped",
+                  "partial",
+                  "unknown",
+                  "not_installed",
+                  "missing"
+                ]
+              },
+              "allowed": {
+                "type": "boolean"
+              },
+              "external": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "state",
+              "allowed"
+            ]
+          }
+        ]
+      },
       "Error": {
         "type": "object",
         "properties": {

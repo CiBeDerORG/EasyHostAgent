@@ -56,6 +56,17 @@ func readCandidateEntry(file *zip.File, limit int64) ([]byte, error) {
 // Inspect 先重算缓存 ZIP 的 SHA-256，再逐项核对候选清单与实际文件。
 // 来源字段是自报声明，只有本地操作者独立核对后才可能给予批准。
 func (s *Store) Inspect(digest string) (CandidateInfo, error) {
+	return s.inspect(digest, nil)
+}
+
+// ReadCandidate 返回与本次摘要和逐文件校验完全相同的字节，避免执行时再次打开 ZIP。
+func (s *Store) ReadCandidate(digest string) (CandidateInfo, map[string][]byte, error) {
+	files := make(map[string][]byte)
+	info, err := s.inspect(digest, files)
+	return info, files, err
+}
+
+func (s *Store) inspect(digest string, contents map[string][]byte) (CandidateInfo, error) {
 	ok, _, err := s.Has(digest)
 	if err != nil {
 		return CandidateInfo{}, err
@@ -131,6 +142,9 @@ func (s *Store) Inspect(digest string) (CandidateInfo, error) {
 	if hex.EncodeToString(manifestSHA[:]) != candidate.ManifestSHA256 {
 		return CandidateInfo{}, ErrDigestMismatch
 	}
+	if contents != nil {
+		contents[candidate.ApplicationID+"/app.yaml"] = manifest
+	}
 	seenSources, seenDestinations := map[string]bool{}, map[string]bool{}
 	var total int64
 	for _, entry := range candidate.Files {
@@ -170,6 +184,9 @@ func (s *Store) Inspect(digest string) (CandidateInfo, error) {
 		hash := sha256.Sum256(data)
 		if hex.EncodeToString(hash[:]) != entry.SHA256 {
 			return CandidateInfo{}, ErrDigestMismatch
+		}
+		if contents != nil {
+			contents[entry.Destination] = data
 		}
 	}
 	return candidate, nil

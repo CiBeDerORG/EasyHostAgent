@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
@@ -19,6 +20,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
@@ -50,6 +52,13 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize immutable bundle cache: %w", err)
 	}
+	jobsCtx, stopJobs := context.WithCancel(ctx)
+	apps, err := market.New(jobsCtx, cfg, os.Getenv("EASYHOSTAGENT_APP_GRANTS"), bundleStore, engine.InspectGrouped)
+	if err != nil {
+		stopJobs()
+		return fmt.Errorf("初始化应用执行器: %w", err)
+	}
+	defer func() { stopJobs(); apps.Wait() }()
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("HTTPS listen %q: %w", cfg.ListenAddr, err)
@@ -59,7 +68,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithBundles(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, store),
+		Handler:           httpapi.NewHandlerWithMarket(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, apps, store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
