@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"io"
 	"os"
 	"syscall"
@@ -56,7 +55,7 @@ func (s *Store) ManifestBytes(digest string) ([]byte, error) {
 		return nil, err
 	}
 	sum := sha256.Sum256(raw)
-	if !errors.Is(err, nil) || hex.EncodeToString(sum[:]) != candidate.ManifestSHA256 {
+	if hex.EncodeToString(sum[:]) != candidate.ManifestSHA256 {
 		return nil, ErrDigestMismatch
 	}
 	return raw, nil
