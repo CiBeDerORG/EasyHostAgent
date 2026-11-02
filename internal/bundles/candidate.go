@@ -15,26 +15,26 @@ import (
 
 var (
 	appIdentifier = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
-	gitCommit = regexp.MustCompile(`^[a-f0-9]{40}$`)
-	agentSource = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
+	gitCommit     = regexp.MustCompile(`^[a-f0-9]{40}$`)
+	agentSource   = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
 )
 
 type CandidateFile struct {
-	Source string `json:"source"`
+	Source      string `json:"source"`
 	Destination string `json:"destination"`
-	Mode string `json:"mode"`
-	SizeBytes int64 `json:"size_bytes"`
-	SHA256 string `json:"sha256"`
+	Mode        string `json:"mode"`
+	SizeBytes   int64  `json:"size_bytes"`
+	SHA256      string `json:"sha256"`
 }
 
 // CandidateInfo 是不可变 ZIP 的来源说明，不是发布者签名或信任批准。
 type CandidateInfo struct {
-	FormatVersion int `json:"format_version"`
-	SourceID string `json:"source_id"`
-	ApplicationID string `json:"application_id"`
-	GitRevision string `json:"git_revision"`
-	ManifestSHA256 string `json:"manifest_sha256"`
-	Files []CandidateFile `json:"files"`
+	FormatVersion  int             `json:"format_version"`
+	SourceID       string          `json:"source_id"`
+	ApplicationID  string          `json:"application_id"`
+	GitRevision    string          `json:"git_revision"`
+	ManifestSHA256 string          `json:"manifest_sha256"`
+	Files          []CandidateFile `json:"files"`
 }
 
 func readCandidateEntry(file *zip.File, limit int64) ([]byte, error) {
