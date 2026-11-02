@@ -5,7 +5,7 @@
 > 状态：**DONE（接口契约已定义并完成静态校验；尚无 Go/Rust 两端真实实现）**  
 > 日期：2026-10-27  
 > 唯一机器可读规范：[`openapi-v1.json`](./openapi-v1.json)（OpenAPI 3.1.0）。  
-> 上游：[`T00-01-easytier-audit.md`](../T00-01-easytier-audit.md)、[`requirements-plan.md`](../requirements-plan.md)。  
+> 历史设计来源：[`T00-01-easytier-audit.md`](../T00-01-easytier-audit.md)。旧需求计划已撤销，本文件不作为当前需求依据。  
 > 范围：**EasyTier Rust 后端 → EasyHostAgent Go 原生服务**的宿主机 API。浏览器 → EasyTier 的会话/权限 API 不在此规范内。
 
 ## 1. 核心分工（必须遵守）
