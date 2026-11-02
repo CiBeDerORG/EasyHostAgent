@@ -56,7 +56,8 @@ var safeVolume = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,127}$`)
 
 // validateNode 在解析前拒绝 YAML 重复键、别名、合并映射及自定义类型，避免资源声明歧义。
 func validateNode(node *yaml.Node) error {
-	if node.Kind == yaml.AliasNode || node.Tag == "!!merge" || strings.HasPrefix(node.Tag, "!") {
+	if node.Kind == yaml.AliasNode || node.Tag == "!!merge" ||
+		(strings.HasPrefix(node.Tag, "!") && !strings.HasPrefix(node.Tag, "!!")) {
 		return ErrInvalid
 	}
 	if node.Kind == yaml.MappingNode {
