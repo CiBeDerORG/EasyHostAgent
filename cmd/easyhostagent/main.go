@@ -14,11 +14,13 @@ import (
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/app"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/trust"
 )
 
 func main() {
@@ -32,11 +34,30 @@ func run(args []string, stdout, stderr io.Writer) int {
 	checkConfig := flags.Bool("check-config", false, "validate configuration and exit")
 	showIdentity := flags.Bool("identity", false, "show stable Agent ID and TLS public key fingerprint locally")
 	pairingCode := flags.Bool("pairing-code", false, "generate a single-use pairing code from a trusted host terminal")
+	approveBundle := flags.String("approve-bundle", "", "locally approve a cached ZIP SHA-256")
+	checkBundle := flags.String("check-bundle", "", "locally verify an approved ZIP SHA-256")
+	revokeBundle := flags.String("revoke-bundle", "", "locally revoke an approved ZIP SHA-256")
+	sourceID := flags.String("source-id", "", "independently verified source UUID (for approval)")
+	appID := flags.String("app-id", "", "independently verified application ID (for approval)")
+	gitRevision := flags.String("git-revision", "", "independently verified Git Commit (for approval)")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	if flags.NArg() != 0 {
 		fmt.Fprintln(stderr, "unexpected arguments:", flags.Args())
+		return 2
+	}
+	bundleActions := 0
+	for _, value := range []string{*approveBundle, *checkBundle, *revokeBundle} {
+		if value != "" {
+			bundleActions++
+		}
+	}
+	if bundleActions > 1 || (bundleActions > 0 && (*showVersion || *checkConfig || *showIdentity || *pairingCode)) ||
+		(bundleActions == 0 && (*sourceID != "" || *appID != "" || *gitRevision != "")) ||
+		(*approveBundle == "" && (*sourceID != "" || *appID != "" || *gitRevision != "")) ||
+		(*approveBundle != "" && (*sourceID == "" || *appID == "" || *gitRevision == "")) {
+		fmt.Fprintln(stderr, "invalid or conflicting local bundle approval options")
 		return 2
 	}
 	if *showVersion {
@@ -48,6 +69,49 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, "configuration error:", err)
 		return 1
+	}
+	if bundleActions != 0 {
+		state, err := identity.LoadOrCreate(cfg.DataDir)
+		if err != nil {
+			fmt.Fprintln(stderr, "identity error:", err)
+			return 1
+		}
+		cache, err := bundles.New(cfg.DataDir)
+		if err != nil {
+			fmt.Fprintln(stderr, "bundle cache error:", err)
+			return 1
+		}
+		approvals, err := trust.New(cfg.DataDir, state.AgentID, cache)
+		if err != nil {
+			fmt.Fprintln(stderr, "local trust error:", err)
+			return 1
+		}
+		if *approveBundle != "" {
+			record, err := approvals.Approve(*approveBundle, *sourceID, *appID, *gitRevision)
+			if err != nil {
+				fmt.Fprintln(stderr, "local bundle approval denied:", err)
+				return 1
+			}
+			fmt.Fprintf(stdout, "Local approval saved: agent_id=%s sha256=%s source_id=%s app_id=%s git_revision=%s\n",
+				record.AgentID, record.SHA256, record.SourceID, record.ApplicationID, record.GitRevision)
+			return 0
+		}
+		if *checkBundle != "" {
+			record, err := approvals.Check(*checkBundle)
+			if err != nil {
+				fmt.Fprintln(stderr, "bundle is not approved:", err)
+				return 1
+			}
+			fmt.Fprintf(stdout, "Local approval valid: agent_id=%s sha256=%s app_id=%s git_revision=%s\n",
+				record.AgentID, record.SHA256, record.ApplicationID, record.GitRevision)
+			return 0
+		}
+		if err := approvals.Revoke(*revokeBundle); err != nil {
+			fmt.Fprintln(stderr, "local approval revocation failed:", err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "Local approval revoked: sha256=%s\n", *revokeBundle)
+		return 0
 	}
 	if *checkConfig {
 		hostService, err := host.New(cfg.DataDir, cfg.SoftwareRoot, cfg.Platform, "")
