@@ -132,6 +132,11 @@ func TestHTTPSPreparedTaskLifecycleAndAuth(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// 未实现的正式 /v1/tasks 路由由 Go ServeMux 返回纯文本 404。
+		if res.StatusCode == http.StatusNotFound && strings.HasPrefix(res.Header.Get("Content-Type"), "text/plain") {
+			res.Body.Close()
+			return res, nil
+		}
 		var response map[string]any
 		if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 			res.Body.Close()
