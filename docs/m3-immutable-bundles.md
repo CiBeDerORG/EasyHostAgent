@@ -7,7 +7,7 @@
 
 - `HEAD /v1/bundles/{sha256}`：校验该 SHA-256 对应的现存文件完整性；存在且可验证时返回 HTTP 204，缺失返回 HTTP 404，存储损坏返回 409。
 - `PUT /v1/bundles/{sha256}`：`Content-Type: application/octet-stream`，最大 **64 MiB**；流式读取并比对请求路径中的小写 SHA-256，与后端存储的原始字节完全一致。
-- 第一次上传返回 **201**，完全相同且已经有效落盘时返回 **200**。响应：`agent_id`、`sha256`、`size_bytes`、`already_exists`。
+- 第一次上传返回 **201**，完全相同且已经有效落盘时返回 **200**。即便已有合法缓存，也必须再次验证本次 PUT 请求体的完整 SHA-256 与 ZIP 安全约束；不接受仅凭命中摘要就忽略错误请求体。响应：`agent_id`、`sha256`、`size_bytes`、`already_exists`。
 - 无论 HEAD 或 PUT 都经 `auth.RequireController` 验证 Bearer Token + `X-EHA-Controller-ID` + `X-EHA-Agent-ID`，并要求真实 HTTPS。
 - 目录默认在 `<EASYHOSTAGENT_DATA_DIR>/bundles/`，权限为 0700，缓存文件权限为 0600；不会写到应用安装目录。
 

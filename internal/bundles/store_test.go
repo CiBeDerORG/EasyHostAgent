@@ -78,6 +78,31 @@ func TestImmutableBundleAndIdempotence(t *testing.T) {
 		t.Fatalf("stored file not private: %v %v", info, err)
 	}
 }
+func TestExistingBundlePutStillValidatesIncomingBody(t *testing.T) {
+	cache := newTestStore(t)
+	valid := zipPayload(t, []string{"sub2api/deploy/install.sh"}, false)
+	digest := digestOf(valid)
+	if _, _, err := cache.Put(context.Background(), digest, bytes.NewReader(valid)); err != nil {
+		t.Fatal(err)
+	}
+	// 已有相同摘要的缓存不能使错误请求体绕过完整性检查。
+	for _, body := range [][]byte{
+		nil,
+		[]byte("not a ZIP"),
+		zipPayload(t, []string{"sub2api/deploy/update.sh"}, false),
+	} {
+		if _, _, err := cache.Put(context.Background(), digest, bytes.NewReader(body)); !errors.Is(err, ErrDigestMismatch) {
+			t.Fatalf("cached digest accepted different request body, size=%d: %v", len(body), err)
+		}
+	}
+	if ok, n, err := cache.Has(digest); err != nil || !ok || n != int64(len(valid)) {
+		t.Fatalf("rejected replay unexpectedly changed cached bundle: %v %d %v", ok, n, err)
+	}
+	if n, already, err := cache.Put(context.Background(), digest, bytes.NewReader(valid)); err != nil || !already || n != int64(len(valid)) {
+		t.Fatalf("valid identical replay must stay idempotent: %v %d %v", already, n, err)
+	}
+}
+
 func TestBundleTrustCannotBeClaimedByDigestOrArchive(t *testing.T) {
 	cache := newTestStore(t)
 	valid := zipPayload(t, []string{"sub2api/deploy/install.sh"}, false)

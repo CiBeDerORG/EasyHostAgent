@@ -178,9 +178,10 @@ func (s *Store) Put(ctx context.Context, digest string, body io.Reader) (int64, 
 	if err != nil {
 		return 0, false, err
 	}
-	exists, size, err := s.verifyStored(digest)
-	if err != nil || exists {
-		return size, exists, err
+	// 已有缓存也不能跳过本次 PUT 请求体的摘要与归档安全校验。
+	exists, _, err := s.verifyStored(digest)
+	if err != nil {
+		return 0, false, err
 	}
 	temp, err := os.CreateTemp(s.dir, ".upload-*.tmp")
 	if err != nil {
@@ -217,6 +218,17 @@ func (s *Store) Put(ctx context.Context, digest string, body io.Reader) (int64, 
 	}
 	if err := temp.Close(); err != nil {
 		return 0, false, err
+	}
+	if exists {
+		// 验证本次字节后再确认原有缓存依然完整，避免并发替换或丢失造成假成功。
+		ok, storedSize, verifyErr := s.verifyStored(digest)
+		if verifyErr != nil {
+			return 0, false, verifyErr
+		}
+		if !ok {
+			return 0, false, ErrCorruptStored
+		}
+		return storedSize, true, nil
 	}
 	if err := os.Link(temp.Name(), target); err != nil {
 		if errors.Is(err, os.ErrExist) {
