@@ -41,7 +41,7 @@ class ApiContractTests(unittest.TestCase):
                     refs = {p.get("$ref") for p in op.get("parameters", [])}
                     self.assertIn("#/components/parameters/AgentId", refs)
                     self.assertIn("#/components/parameters/ControllerId", refs)
-        self.assertEqual(len(ids), 15)
+        self.assertEqual(len(ids), 19)
         self.assertNotIn("/v1/catalog", API["paths"])
 
     def test_documented_json_examples(self):
@@ -54,6 +54,59 @@ class ApiContractTests(unittest.TestCase):
         for name, snippet in zip(types, snippets):
             with self.subTest(name=name):
                 validate(name, json.loads(snippet))
+
+    def test_preparation_is_not_the_async_execution_contract(self):
+        task_routes = API["paths"]
+        self.assertEqual(
+            task_routes["/v1/tasks"]["post"]["operationId"], "createTask"
+        )
+        self.assertEqual(
+            task_routes["/v1/task-preparations"]["post"]["operationId"],
+            "prepareApplicationTask",
+        )
+        preparation = {
+            "request_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "action": "install",
+            "bundle_sha256": "b" * 64,
+        }
+        validate("TaskPreparationInput", preparation)
+        with self.assertRaises(Exception):
+            validate("TaskPreparationInput", dict(preparation, shell="rm -rf /"))
+        with self.assertRaises(Exception):
+            validate("TaskPreparationInput", dict(preparation, action="run_shell"))
+        with self.assertRaises(Exception):
+            validate("TaskPreparationInput", dict(preparation, source_id="official"))
+        record = {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "agent_id": "11111111-1111-4111-8111-111111111111",
+            "controller_id": "22222222-2222-4222-8222-222222222222",
+            "device_id": "33333333-3333-4333-8333-333333333333",
+            "grant_at": "2026-11-02T00:01:00Z",
+            "request_id": preparation["request_id"],
+            "action": "install",
+            "bundle_sha256": preparation["bundle_sha256"],
+            "source_id": "44444444-4444-4444-8444-444444444444",
+            "application_id": "sub2api",
+            "git_revision": "a" * 40,
+            "manifest_sha256": "c" * 64,
+            "status": "prepared",
+            "created_at": "2026-11-02T00:01:00Z",
+            "updated_at": "2026-11-02T00:01:00Z",
+            "execution_enabled": False,
+        }
+        validate("TaskPreparation", record)
+        validate("TaskPreparationResponse", {
+            "agent_id": record["agent_id"], "task": record,
+            "execution_enabled": False, "idempotent_replay": False,
+        })
+        validate("TaskPreparationList", {
+            "agent_id": record["agent_id"], "tasks": [record],
+            "execution_enabled": False,
+        })
+        with self.assertRaises(Exception):
+            validate("TaskPreparation", dict(record, execution_enabled=True))
+        with self.assertRaises(Exception):
+            validate("TaskPreparation", dict(record, status="running"))
 
     def test_portainer_sub2api_standalone_inventory(self):
         cases = {
