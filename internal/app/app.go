@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
@@ -45,6 +46,10 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("initialize local Docker Engine: %w", err)
 	}
 	defer engine.Close()
+	bundleStore, err := bundles.New(cfg.DataDir)
+	if err != nil {
+		return fmt.Errorf("initialize immutable bundle cache: %w", err)
+	}
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("HTTPS listen %q: %w", cfg.ListenAddr, err)
@@ -54,7 +59,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithDocker(state, cfg.Platform, buildinfo.Version, hostService, engine, store),
+		Handler:           httpapi.NewHandlerWithBundles(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
