@@ -1,5 +1,7 @@
 # EasyHostAgent 开发任务计划（可执行拆分 v0.1）
 
+> **历史版本提醒（2026-11-02）**：本计划的 EasyTier 控制端、原 T00～T06 编号和历史 DONE 是当时方案及当时验收记录；当前 EasyNetTopo V1 以 [R001 需求](requirements/easynettopo-v1/requirement.md) 和 [T001 任务](requirements/easynettopo-v1/tasks.md) 为权威。旧编号保留供追溯，不可把旧完成率当作新控制架构的完成率。
+
 > 制定日期：2026-10-27。关联需求：[`requirements-plan.md`](./requirements-plan.md)。
 > 状态：**开发计划执行中，累计 16/50；M0 全部、M1 7/8、M2 4/7 已完成。T01-08 FnOS 实机阻塞；T02-04/06 等待 M3/M4 受管归属、T02-07 Go/Rust CI 已通过但真机未验收。T03-01～03 Deploy 正式清单/校验代码已提交，Deploy Actions [#40675601770](https://github.com/CiBeDerORG/deploy/actions/runs/40675601770) Job 无步骤失败。T03-04/05 EasyTier 本地 Git 商店、事务快照、只读 API 与页面已提交；T03-06/07 动态配置表单、严格 YAML 清单校验、固定提交包打包及 SHA-256 回归也已提交，最新 Rust/Web CI 尚待核验，真实私有 Git/FnOS 联调未完成；十项进行中、独立真机阻塞，不虚报已完成。**
 > 三仓库：`CiBeDerORG/EasyTier` (ET)、`CiBeDerORG/EasyHostAgent` (EHA)、`CiBeDerORG/deploy` (DEP)。
