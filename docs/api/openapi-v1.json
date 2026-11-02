@@ -2421,6 +2421,63 @@
           "execution_enabled": {
             "type": "boolean",
             "const": false
+          },
+          "footprint": {
+            "type": "object",
+            "description": "来自已审批不可变 Manifest 的静态默认资源预留。仅准备阶段预检，不代表已实际占有 Host 端口。",
+            "additionalProperties": false,
+            "properties": {
+              "compose_project": {
+                "type": "string"
+              },
+              "ports": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "host_ip": {
+                      "type": "string"
+                    },
+                    "published": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 65535
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "enum": [
+                        "tcp",
+                        "udp"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "host_ip",
+                    "published",
+                    "protocol"
+                  ]
+                }
+              },
+              "named_volumes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "data_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "compose_project",
+              "ports",
+              "named_volumes",
+              "data_paths"
+            ]
           }
         },
         "required": [
