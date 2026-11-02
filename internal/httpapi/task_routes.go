@@ -35,7 +35,7 @@ func registerTasks(mux *http.ServeMux, agentID string, grants *pairing.Store, st
 			sendError(w, http.StatusServiceUnavailable, "task_unavailable", "部署任务存储或信任状态不可用")
 		}
 	}
-	mux.Handle("/v1/tasks", auth.RequireController(agentID, grants, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/v1/task-preparations", auth.RequireController(agentID, grants, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		controller, token := readAuth(r)
 		switch r.Method {
 		case http.MethodGet:
@@ -82,7 +82,7 @@ func registerTasks(mux *http.ServeMux, agentID string, grants *pairing.Store, st
 			sendError(w, http.StatusMethodNotAllowed, "method_not_allowed", "仅允许查询与准备任务")
 		}
 	})))
-	mux.Handle("/v1/tasks/{id}", auth.RequireController(agentID, grants, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/v1/task-preparations/{id}", auth.RequireController(agentID, grants, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		controller, token := readAuth(r)
 		id := r.PathValue("id")
 		switch r.Method {
