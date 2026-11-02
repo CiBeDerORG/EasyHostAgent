@@ -3,7 +3,7 @@
   "info": {
     "title": "EasyHostAgent HTTP API",
     "version": "1.0.0-draft",
-    "description": "Agent-side contract for EasyTier↔EasyHostAgent. Controller-side browser API is NOT defined here. Docker/Compose only in v1; passive calls, no heartbeat, no remote Git, no automatic rollback."
+    "description": "Agent-side contract for an authorized controller (EasyNetTopo V1 first). Controller-side browser API is separate. Docker/Compose only in v1; on-demand calls, no heartbeat, no remote Git, no automatic rollback."
   },
   "servers": [
     {
@@ -11,7 +11,7 @@
       "variables": {
         "agentAddress": {
           "default": "127.0.0.1",
-          "description": "Address chosen from verified EasyTier device IP after explicit user request"
+          "description": "Verified directly reachable host IP/address supplied by the EasyNetTopo user"
         },
         "port": {
           "default": "7014"
@@ -643,7 +643,7 @@
         "tags": [
           "Agent"
         ],
-        "summary": "Upload immutable Deploy artifact received from EasyTier",
+        "summary": "Upload immutable application bundle from authorized controller",
         "operationId": "putBundle",
         "description": "Max 64 MiB, streaming bounded verification; reject archive traversal, symlinks, special device entries and unsupported file types. Bundle is not executed upon upload; allowlisted task actions only. Identical digest PUT is idempotent.",
         "parameters": [
@@ -1282,12 +1282,12 @@
         "properties": {
           "controller_id": {
             "type": "string",
-            "description": "Stable UUID of EasyTier controller installation; not the user ID.",
+            "description": "Stable installation UUID of the authorized controller (EasyNetTopo V1); never a user identity.",
             "format": "uuid"
           },
           "device_id": {
             "type": "string",
-            "description": "Existing EasyTier asset device UUID.",
+            "description": "Stable host UUID in the controller registry. Retained wire field name for compatibility; not an EasyTier asset requirement.",
             "format": "uuid"
           },
           "pairing_code": {
@@ -1314,17 +1314,17 @@
           },
           "controller_id": {
             "type": "string",
-            "description": "Paired controller installation ID.",
+            "description": "Stable authorized control center installation UUID.",
             "format": "uuid"
           },
           "device_id": {
             "type": "string",
-            "description": "Selected existing asset device ID.",
+            "description": "Stable controller host UUID (legacy field name; not required to be an EasyTier asset).",
             "format": "uuid"
           },
           "access_token": {
             "type": "string",
-            "description": "High-entropy bearer token shown once, stored encrypted by EasyTier; do not log.",
+            "description": "High-entropy bearer token shown once. Controller persists it encrypted; never log or expose to browser.",
             "minLength": 32
           },
           "paired_at": {
@@ -1777,9 +1777,14 @@
             ],
             "description": "Allowlisted operation. Not an arbitrary shell command."
           },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Controller-issued stable Git source UUID, not a trust claim and never an execution authorization."
+          },
           "application_id": {
             "type": "string",
-            "description": "Deploy catalog app ID when kind=application."
+            "description": "Manifest app ID within source_id; cannot uniquely identify a multi-source catalog by itself."
           },
           "resource_id": {
             "type": "string",
@@ -1792,7 +1797,7 @@
           },
           "catalog_revision": {
             "type": "string",
-            "description": "Central Deploy source commit/revision, for audit only."
+            "description": "Pinned Git commit for source_id, for provenance; does not authorize script execution."
           },
           "variant": {
             "type": "string",
@@ -1822,7 +1827,27 @@
           "action"
         ],
         "additionalProperties": false,
-        "description": "For install/update/configure/adopt, application bundle and manifest validation apply. For uninstall, retain_data defaults true. No automatic rollback."
+        "description": "Application tasks require source_id and application_id. The source_id is controller-issued metadata, NOT a script execution grant: Agent must enforce a separate host-local trusted approval for script bundles; untrusted third-party Compose must pass strict capability restrictions. Tasks are still planned routes and must fail closed until implemented. For uninstall, retain_data defaults true. No automatic rollback.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "application"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "source_id",
+                "application_id"
+              ]
+            }
+          }
+        ]
       },
       "TaskOptions": {
         "type": "object",
@@ -1888,6 +1913,11 @@
           "action": {
             "type": "string",
             "description": "Allowlisted task action."
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Controller-issued source UUID recorded for audit; never a trust grant."
           },
           "application_id": {
             "type": "string",
@@ -1955,7 +1985,27 @@
           "updated_at",
           "log_offset"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "application"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "source_id",
+                "application_id"
+              ]
+            }
+          }
+        ]
       },
       "TaskPage": {
         "type": "object",
@@ -2156,7 +2206,7 @@
   },
   "x-eha-contract-notes": {
     "transport": "HTTPS mandatory. Pin SPKI SHA256 against locally shown fingerprint before any unauthenticated pairing. Do not disable verification, redirect or use ambient proxy; verify stable agent_id in response/header for authenticated requests.",
-    "binding": "EasyTier browser calls EasyTier Rust backend with existing user session. Only Rust backend calls this API. Client must send X-EHA-Controller-ID (controller UUID) and X-EHA-Agent-ID (expected UUID) for authenticated requests; agent validates token/controller/device binding. EasyTier validates returned agent_id, including after IP changes. Header fields are declared for every protected operation under components.parameters; the controller cannot gain authority merely by spoofing an ID without the paired token.",
+    "binding": "Browser calls EasyNetTopo backend with authenticated user session; only the backend calls the Agent. Send X-EHA-Controller-ID and X-EHA-Agent-ID with Bearer token. The Agent validates token + paired controller + agent identity. The pairing device_id field denotes stable EasyNetTopo host_id in V1; do not treat it as EasyTier-only. Successful re-pair atomically replaces the previous controller grant.",
     "limits": {
       "connect_timeout_seconds": 3,
       "default_request_timeout_seconds": 15,
@@ -2171,7 +2221,8 @@
     },
     "behavior": "HTTP tasks return immediately and persist locally; no automated task polling when page is closed, no lost-request auto retry without same task_id, no automatic cleanup/rollback after errors.",
     "inventory": "complete=false or Docker provider error is never evidence of deleted applications. Stopped resources still exist.",
-    "controller_reconciliation": "EasyTier alone owns app templates, service creation/deletion, public mappings, store Git pull and authorization of admin vs own devices. Failure of service binding is stored as separately retryable state; never remove an otherwise successful Docker install.",
-    "agent_restart": "Previously running operations are recorded as interrupted/failed with logs retained; do not auto retry or rollback."
+    "controller_reconciliation": "EasyNetTopo owns catalog sources, host/instance records, user permissions and task indexes; Agent owns actual local Docker inventory and execution state. It is invalid to infer deletion when Docker inventory is incomplete or unavailable. App integrations are independent from app installations.",
+    "agent_restart": "Previously running operations are recorded as interrupted/failed with logs retained; do not auto retry or rollback.",
+    "application_source_security": "source_id is a controller-issued UUID identifying the catalog source, not an authority claim. Execution of script bundles requires independent host-local approval of immutable content or verified publisher signature and allowlisted actions. Untrusted Compose is constrained separately. Neither source_id nor SHA-256 alone proves a package is trusted."
   }
 }

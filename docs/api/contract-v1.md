@@ -1,5 +1,7 @@
 # T00-02：EasyTier ↔ EasyHostAgent HTTP API v1 契约
 
+> **2026-11 EasyNetTopo M0 兼容说明**：本文件保留 2026-10-27 原 EasyTier 集成设计作为历史基线。当前 V1.0 的正式控制端目标已改为 **EasyNetTopo**（Go），不是 EasyTier Rust 后端；本次只更改配对身份语义和未实现的任务请求契约，不能把旧 EasyTier 设备/API/服务联动条款当作 EasyNetTopo 已批准功能。最新约束见 [EasyNetTopo M0 协议清单](https://github.com/CiBeDerORG/EasyNetTopo/blob/docs/platform-integration-m0/docs/architecture/m0-cross-repo-contracts.md) 与本文第 8 节。Agent 已实现的配对接口保持原有字段名，`/v1/bundles` 和 `/v1/tasks` 尚未实现。
+
 > 状态：**DONE（接口契约已定义并完成静态校验；尚无 Go/Rust 两端真实实现）**  
 > 日期：2026-10-27  
 > 唯一机器可读规范：[`openapi-v1.json`](./openapi-v1.json)（OpenAPI 3.1.0）。  
@@ -146,6 +148,7 @@ Content-Type: application/octet-stream
   "task_id": "44444444-4444-4444-8444-444444444444",
   "kind": "application",
   "action": "install",
+  "source_id": "55555555-5555-4555-8555-555555555555",
   "application_id": "portainer",
   "bundle_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "catalog_revision": "0123456789abcdef0123456789abcdef01234567",
@@ -164,6 +167,7 @@ Content-Type: application/octet-stream
   "task_id": "44444444-4444-4444-8444-444444444444",
   "kind": "application",
   "action": "install",
+  "source_id": "55555555-5555-4555-8555-555555555555",
   "application_id": "portainer",
   "status": "accepted",
   "created_at": "2026-10-27T00:03:00Z",
@@ -283,3 +287,17 @@ GET /v1/tasks/44444444-4444-4444-8444-444444444444/logs?offset=0
 - [ ] 真实 Rust/Go 合约测试、Go 服务运行、FNOS 连接、外部 OpenAPI 规范解析器校验：**后续实现和 CI 阶段**，当前不声称已经完成。
 
 **结论：T00-02 接口契约可供 Go/Rust 实施；下一项 T00-03 是 Deploy `app.yaml` 规范。**
+
+## 8. EasyNetTopo M0 跨项目协议增量（2026-11）
+
+本节替代上文中仅适用于 EasyTier 的“控制端”语义，不改写历史实现轨迹：
+
+1. **唯一控制端**：`controller_id` 是每套 EasyNetTopo 安装的稳定 UUID；一台 Agent 同时只有一个有效 controller grant。配对码由 Agent 本机可信终端生成，成功交换才替换旧授权；不能依靠 HTTP 自报指纹建立 TLS 信任。
+2. **`device_id` 不重命名**：仍为配对 API 原字段和 UUID 校验，但现在表示 EasyNetTopo 的 `host_id`，而不是 `asset_devices.id`。有历史 EasyTier 绑定的主机必须由用户完成新配对，旧授权才失效；不自动迁移身份。
+3. **应用来源必须唯一**：`TaskStart.kind=application` 要求 `source_id`（由 EasyNetTopo 签发的 UUID）与 `application_id`。`Task` 响应也要回显这两个字段。仅 `kind=docker_resource` 或 `kind=host` 不要求 `source_id`。相同 `application_id` 在不同来源是不同商店模板，但同一宿主的同名 Compose Project 仍有资源冲突。
+4. **来源不授权执行**：`source_id` 仅用于归属与审计；不得因某个 UUID 或 manifest 中声明 `official` 就获得脚本执行权限。执行受信任脚本前必须校验**宿主本地批准的包摘要或被验证的发布签名**及限制的动作/路径；第三方 Compose 另有严格高权限能力限制。没有完成执行策略实现和测试前，脚本任务必须保持不可用。**包 SHA-256 仅证明完整性，不等于信任。**
+5. **版本行为**：新申请来源身份字段影响尚未实现的任务 API，不影响现有配对/主机/Docker 查询接口的 JSON 线协议。旧版客户端未带来源字段时，新的应用任务契约必须拒绝；禁止服务端自动猜一个“默认官方来源”，禁止客户端去掉字段重试。
+6. **任务状态**：`POST /v1/tasks` 未来实现后，只有任务持久化完成才返回 202，重复请求按 task_id + 规范化内容摘要幂等；请求失联先查原 UUID，不能盲目再安装或自动回滚。
+7. **按需访问**：浏览器仅对 EasyNetTopo 同源 API 发起请求，控制端后端负责私有 Git 拉取、用户权限与授权凭据存储，Agent 不连接 Git，也无心跳、自动同步和离线任务队列。
+
+**M0 状态**：本次完成的是机器可读契约、说明与契约测试增量；不是 Go 侧远程任务处理器，也不是完整安全执行机制。其余以前的 EasyTier 业务集成条款保留历史语义，不可直接用于 EasyNetTopo。
