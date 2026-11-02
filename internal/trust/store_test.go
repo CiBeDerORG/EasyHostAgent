@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	testAgent = "11111111-1111-4111-8111-111111111111"
-	testSource = "22222222-2222-4222-8222-222222222222"
-	testApp = "sub2api"
+	testAgent    = "11111111-1111-4111-8111-111111111111"
+	testSource   = "22222222-2222-4222-8222-222222222222"
+	testApp      = "sub2api"
 	testRevision = "0123456789abcdef0123456789abcdef01234567"
 )
 
@@ -47,9 +47,9 @@ func makeCandidateZIP(t *testing.T, mutate func(*bundles.CandidateInfo)) []byte 
 	var buf bytes.Buffer
 	writer := zip.NewWriter(&buf)
 	for _, file := range []struct {
-		name string
+		name    string
 		content []byte
-		mode os.FileMode
+		mode    os.FileMode
 	}{
 		{"bundle-manifest.json", raw, 0644},
 		{"sub2api/app.yaml", manifest, 0644},
@@ -149,7 +149,7 @@ func TestLocalBundleApprovalRequiresExplicitVerifiedIdentity(t *testing.T) {
 
 func TestMalformedCandidateCannotBeApproved(t *testing.T) {
 	cases := []struct {
-		name string
+		name   string
 		mutate func(*bundles.CandidateInfo)
 	}{
 		{"伪造 Manifest 摘要", func(m *bundles.CandidateInfo) { m.ManifestSHA256 = strings.Repeat("0", 64) }},
