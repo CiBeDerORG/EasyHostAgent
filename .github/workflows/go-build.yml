@@ -24,7 +24,10 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Check gofmt
-        run: test -z "$(gofmt -l cmd internal)"
+        run: |
+          gofmt -l cmd internal | tee /tmp/unformatted-go
+          gofmt -d cmd/easyhostagent/main.go cmd/easyhostagent/local_trust_test.go internal/bundles/candidate.go internal/trust/store.go internal/trust/store_test.go | head -n 600
+          test ! -s /tmp/unformatted-go
       - name: Run go vet
         run: go vet ./...
       - name: Run unit tests
