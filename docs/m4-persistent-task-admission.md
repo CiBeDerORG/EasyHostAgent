@@ -1,6 +1,6 @@
 # M4-01：部署任务持久化准入（仅准备，不执行）
 
-> 当前版本的 `POST /v1/tasks` **不会安装、更新或卸载任何应用**。本阶段仅提供有审计身份的部署意图登记、幂等请求、应用级资源预留、查看与取消；任务状态 `prepared` **绝不等于运行中或安装完成**。
+> 当前版本的 `POST /v1/task-preparations` **不会安装、更新或卸载任何应用**。本阶段仅提供有审计身份的部署意图登记、幂等请求、应用级资源预留、查看与取消；任务状态 `prepared` **绝不等于运行中或安装完成**。
 
 ## 1. 已实现的授权流程
 
@@ -40,7 +40,9 @@ status=prepared, execution_enabled=false
 
 ## 2. HTTPS API
 
-**POST /v1/tasks**（Content-Type: application/json，最大 4096 字节；要求 Agent 现有配对认证）
+本阶段使用独立的 `/v1/task-preparations` 命名空间，**不占用** OpenAPI 已规划的 `/v1/tasks`（真正异步执行任务）路径；后者仍没有实现也没有公开。
+
+**POST /v1/task-preparations**（Content-Type: application/json，最大 4096 字节；要求 Agent 现有配对认证）
 
 ```json
 {
@@ -52,11 +54,11 @@ status=prepared, execution_enabled=false
 
 `action` 接受 `install`、`update`、`uninstall`，但只记录意图，不执行。来源及应用名称从 Agent 本机批准的不可变 ZIP 身份推导，不能由调用者任意填入。首次创建返回 201，幂等重试 200，应用或幂等键冲突 409；未获本机批准 403，未配对/配对失效 401；响应包含 `task`、`idempotent_replay`、`execution_enabled:false`。
 
-**GET /v1/tasks**：只返回当前 Controller + Device + 配对纪元的任务，含已取消记录。
+**GET /v1/task-preparations**：只返回当前 Controller + Device + 配对纪元的任务，含已取消记录。
 
-**GET /v1/tasks/{task_id}**：按授权身份查询一项任务；其他控制中心的任务不可见（404）。
+**GET /v1/task-preparations/{task_id}**：按授权身份查询一项任务；其他控制中心的任务不可见（404）。
 
-**DELETE /v1/tasks/{task_id}**：幂等取消当前控制中心的 `prepared` 任务。只修改任务记录并释放预留，**不等于停止容器或中断运行程序**（本阶段没有运行程序）。
+**DELETE /v1/task-preparations/{task_id}**：幂等取消当前控制中心的 `prepared` 任务。只修改任务记录并释放预留，**不等于停止容器或中断运行程序**（本阶段没有运行程序）。
 
 所有路径要求 Agent HTTPS，并由统一的 `auth.RequireController` 校验 Bearer / X-EHA-Controller-ID / X-EHA-Agent-ID。未知动作、JSON 额外字段/多 JSON 文档、尺寸超限等均拒绝。
 
