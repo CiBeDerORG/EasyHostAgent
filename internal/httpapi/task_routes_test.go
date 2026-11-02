@@ -47,7 +47,7 @@ func taskRouteFixture(t *testing.T) (identity.State, *pairing.Store, *tasks.Stor
 	}
 	source := "44444444-4444-4444-8444-444444444444"
 	revision := "0123456789abcdef0123456789abcdef01234567"
-	manifest := []byte("schema_version: 1\nid: sub2api\n")
+	manifest := []byte("schema_version: 1\nid: sub2api\nruntime:\n  kind: docker_compose\n  compose_project: sub2api\nconfig:\n  - key: SUB2API_HTTP_PORT\n    type: port\n    default: 7010\n  - key: SUB2API_BIND_IP\n    type: ipv4\n    default: 0.0.0.0\nports:\n  - protocol: tcp\n    host_port_key: SUB2API_HTTP_PORT\n    bind_address_key: SUB2API_BIND_IP\ndata:\n  paths: [sub2api/data/app]\n  named_volumes: [sub2api_pgdata]\n  default_retain: true\n")
 	script := []byte("#!/bin/sh\nexit 0\n")
 	manifestSHA, scriptSHA := sha256.Sum256(manifest), sha256.Sum256(script)
 	desc := bundles.CandidateInfo{

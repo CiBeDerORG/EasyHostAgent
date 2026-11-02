@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"syscall"
@@ -44,22 +45,23 @@ type Input struct {
 }
 
 type Task struct {
-	ID               string `json:"id"`
-	AgentID          string `json:"agent_id"`
-	ControllerID     string `json:"controller_id"`
-	DeviceID         string `json:"device_id"`
-	GrantAt          string `json:"grant_at"`
-	RequestID        string `json:"request_id"`
-	Action           string `json:"action"`
-	BundleSHA256     string `json:"bundle_sha256"`
-	SourceID         string `json:"source_id"`
-	ApplicationID    string `json:"application_id"`
-	GitRevision      string `json:"git_revision"`
-	ManifestSHA256   string `json:"manifest_sha256"`
-	Status           string `json:"status"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
-	ExecutionEnabled bool   `json:"execution_enabled"`
+	Footprint        Footprint `json:"footprint"`
+	ID               string    `json:"id"`
+	AgentID          string    `json:"agent_id"`
+	ControllerID     string    `json:"controller_id"`
+	DeviceID         string    `json:"device_id"`
+	GrantAt          string    `json:"grant_at"`
+	RequestID        string    `json:"request_id"`
+	Action           string    `json:"action"`
+	BundleSHA256     string    `json:"bundle_sha256"`
+	SourceID         string    `json:"source_id"`
+	ApplicationID    string    `json:"application_id"`
+	GitRevision      string    `json:"git_revision"`
+	ManifestSHA256   string    `json:"manifest_sha256"`
+	Status           string    `json:"status"`
+	CreatedAt        string    `json:"created_at"`
+	UpdatedAt        string    `json:"updated_at"`
+	ExecutionEnabled bool      `json:"execution_enabled"`
 }
 
 type Store struct {
@@ -67,6 +69,7 @@ type Store struct {
 	agentID string
 	grants  *pairing.Store
 	trust   *trust.Store
+	guard   *resourceGuard
 }
 
 func New(dataDir, agentID string, grants *pairing.Store, approvals *trust.Store) (*Store, error) {
@@ -262,6 +265,13 @@ func (s *Store) Submit(controllerID, token string, in Input) (Task, bool, error)
 		if err != nil {
 			return err
 		}
+		var claims Footprint
+		if s.guard != nil {
+			claims, err = s.guard.claims(in.BundleSHA256, approval.ApplicationID)
+			if err != nil {
+				return err
+			}
+		}
 		// 幂等键碰撞先于资源冲突；同请求重试永不产生第二个任务。
 		for _, task := range all {
 			if task.RequestID == in.RequestID {
@@ -274,8 +284,24 @@ func (s *Store) Submit(controllerID, token string, in Input) (Task, bool, error)
 			}
 		}
 		for _, task := range all {
-			if task.Status == Prepared && task.ApplicationID == approval.ApplicationID {
+			if task.Status != Prepared {
+				continue
+			}
+			if s.guard != nil {
+				// 历史预留也属于不可信磁盘记录，不能用可被修改的指纹绕过跨应用锁。
+				actual, err := s.guard.claims(task.BundleSHA256, task.ApplicationID)
+				if err != nil || !reflect.DeepEqual(actual, task.Footprint) {
+					return ErrCorrupt
+				}
+			}
+			if task.ApplicationID == approval.ApplicationID ||
+				(s.guard != nil && claimsConflict(claims, task.Footprint)) {
 				return ErrConflict
+			}
+		}
+		if s.guard != nil {
+			if err := s.guard.validateDocker(claims, in.Action); err != nil {
+				return err
 			}
 		}
 		if len(all) >= maxTasks {
@@ -291,7 +317,7 @@ func (s *Store) Submit(controllerID, token string, in Input) (Task, bool, error)
 			GrantAt: grantAt, RequestID: in.RequestID, Action: in.Action,
 			BundleSHA256: in.BundleSHA256, SourceID: approval.SourceID,
 			ApplicationID: approval.ApplicationID, GitRevision: approval.GitRevision,
-			ManifestSHA256: approval.ManifestSHA256, Status: Prepared,
+			ManifestSHA256: approval.ManifestSHA256, Footprint: claims, Status: Prepared,
 			CreatedAt: now, UpdatedAt: now, ExecutionEnabled: false,
 		}
 		if err := s.storeOne(task, false); err != nil {

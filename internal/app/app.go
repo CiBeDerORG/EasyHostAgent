@@ -56,9 +56,13 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize local bundle approval gate: %w", err)
 	}
-	taskStore, err := tasks.New(cfg.DataDir, state.AgentID, store, approvals)
+	softwareRoot, err := hostService.Root()
 	if err != nil {
-		return fmt.Errorf("initialize persistent task admission: %w", err)
+		return fmt.Errorf("read controlled software root: %w", err)
+	}
+	taskStore, err := tasks.NewGuarded(cfg.DataDir, state.AgentID, store, approvals, bundleStore, engine, softwareRoot)
+	if err != nil {
+		return fmt.Errorf("initialize guarded task admission: %w", err)
 	}
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
