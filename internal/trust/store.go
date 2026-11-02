@@ -20,24 +20,24 @@ import (
 )
 
 var (
-	uuid = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
-	ErrNotApproved = errors.New("部署包尚未获得本机批准")
+	uuid               = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
+	ErrNotApproved     = errors.New("部署包尚未获得本机批准")
 	ErrCorruptApproval = errors.New("本机批准记录损坏，拒绝执行")
 )
 
 type Approval struct {
-	Version int `json:"version"`
-	AgentID string `json:"agent_id"`
-	SHA256 string `json:"sha256"`
-	SourceID string `json:"source_id"`
-	ApplicationID string `json:"application_id"`
-	GitRevision string `json:"git_revision"`
+	Version        int    `json:"version"`
+	AgentID        string `json:"agent_id"`
+	SHA256         string `json:"sha256"`
+	SourceID       string `json:"source_id"`
+	ApplicationID  string `json:"application_id"`
+	GitRevision    string `json:"git_revision"`
 	ManifestSHA256 string `json:"manifest_sha256"`
-	ApprovedAt string `json:"approved_at"`
+	ApprovedAt     string `json:"approved_at"`
 }
 
 type Store struct {
-	dir string
+	dir     string
 	agentID string
 	bundles *bundles.Store
 }
