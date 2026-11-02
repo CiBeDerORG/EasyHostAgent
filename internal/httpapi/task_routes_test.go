@@ -140,7 +140,7 @@ func TestHTTPSPreparedTaskLifecycleAndAuth(t *testing.T) {
 		res.Body.Close()
 		return res, response
 	}
-	body := `{"request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","action":"install","bundle_sha256":"`+digest+`"}`
+	body := `{"request_id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","action":"install","bundle_sha256":"` + digest + `"}`
 	res, _ := call("POST", "/v1/tasks", body, false)
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatal("未配对控制中心提交了任务")
