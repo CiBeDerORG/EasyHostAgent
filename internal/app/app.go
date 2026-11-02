@@ -20,8 +20,6 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
-	"github.com/CiBeDerORG/EasyHostAgent/internal/tasks"
-	"github.com/CiBeDerORG/EasyHostAgent/internal/trust"
 )
 
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
@@ -52,18 +50,6 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("initialize immutable bundle cache: %w", err)
 	}
-	approvals, err := trust.New(cfg.DataDir, state.AgentID, bundleStore)
-	if err != nil {
-		return fmt.Errorf("initialize local bundle approval gate: %w", err)
-	}
-	softwareRoot, err := hostService.Root()
-	if err != nil {
-		return fmt.Errorf("read controlled software root: %w", err)
-	}
-	taskStore, err := tasks.NewGuarded(cfg.DataDir, state.AgentID, store, approvals, bundleStore, engine, softwareRoot)
-	if err != nil {
-		return fmt.Errorf("initialize guarded task admission: %w", err)
-	}
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("HTTPS listen %q: %w", cfg.ListenAddr, err)
@@ -73,7 +59,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithTaskAdmission(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, taskStore, store),
+		Handler:           httpapi.NewHandlerWithBundles(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

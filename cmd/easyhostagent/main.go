@@ -20,7 +20,6 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
-	"github.com/CiBeDerORG/EasyHostAgent/internal/tasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/trust"
 )
 
@@ -41,9 +40,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 	sourceID := flags.String("source-id", "", "independently verified source UUID (for approval)")
 	appID := flags.String("app-id", "", "independently verified application ID (for approval)")
 	gitRevision := flags.String("git-revision", "", "independently verified Git Commit (for approval)")
-	recoverTask := flags.String("recover-task", "", "locally supersede an orphaned prepared task")
-	expectedController := flags.String("expected-controller", "", "confirm the previous Controller UUID for task recovery")
-	expectedApp := flags.String("expected-app", "", "confirm the previous application ID for task recovery")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -64,12 +60,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "invalid or conflicting local bundle approval options")
 		return 2
 	}
-	if (*recoverTask != "" && (bundleActions != 0 || *showVersion || *checkConfig || *showIdentity || *pairingCode ||
-		*expectedController == "" || *expectedApp == "")) ||
-		(*recoverTask == "" && (*expectedController != "" || *expectedApp != "")) {
-		fmt.Fprintln(stderr, "invalid or conflicting local task recovery options")
-		return 2
-	}
 	if *showVersion {
 		fmt.Fprintln(stdout, buildinfo.String())
 		return 0
@@ -79,41 +69,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, "configuration error:", err)
 		return 1
-	}
-	if *recoverTask != "" {
-		state, err := identity.LoadOrCreate(cfg.DataDir)
-		if err != nil {
-			fmt.Fprintln(stderr, "identity error:", err)
-			return 1
-		}
-		grants, err := pairing.New(cfg.DataDir, state.AgentID)
-		if err != nil {
-			fmt.Fprintln(stderr, "pairing state error:", err)
-			return 1
-		}
-		cache, err := bundles.New(cfg.DataDir)
-		if err != nil {
-			fmt.Fprintln(stderr, "bundle cache error:", err)
-			return 1
-		}
-		approvals, err := trust.New(cfg.DataDir, state.AgentID, cache)
-		if err != nil {
-			fmt.Fprintln(stderr, "local approval error:", err)
-			return 1
-		}
-		queue, err := tasks.New(cfg.DataDir, state.AgentID, grants, approvals)
-		if err != nil {
-			fmt.Fprintln(stderr, "task state error:", err)
-			return 1
-		}
-		task, err := queue.RecoverStaleLocal(*recoverTask, *expectedController, *expectedApp)
-		if err != nil {
-			fmt.Fprintln(stderr, "local recovery denied:", err)
-			return 1
-		}
-		fmt.Fprintf(stdout, "Stale task recorded: task_id=%s status=%s app_id=%s previous_controller=%s\n",
-			task.ID, task.Status, task.ApplicationID, task.ControllerID)
-		return 0
 	}
 	if bundleActions != 0 {
 		state, err := identity.LoadOrCreate(cfg.DataDir)
