@@ -1,5 +1,7 @@
 # EasyHostAgent 需求计划（产品与技术基线 v0.1）
 
+> **历史方案提醒（2026-11-02）**：本文是以 EasyTier 为控制中心的 2026-10-27 基线，保留作历史和迁移参考。EasyNetTopo V1 已确认独立控制 Agent，当前需求入口改为 [R001 · 新控制端规格](requirements/easynettopo-v1/requirement.md)；旧 R-01～R-xx 编号不自动继承为新需求已交付。
+
 > 制定日期：2026-10-27。状态：需求已形成可实施基线；尚未开发、测试或验收。本文件以本轮最新用户决策为准，发生冲突时新决策优先。
 >
 > 涉及仓库：`CiBeDerORG/EasyTier`、`CiBeDerORG/EasyHostAgent`、`CiBeDerORG/deploy`。
