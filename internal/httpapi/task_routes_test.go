@@ -178,6 +178,10 @@ func TestHTTPSPreparedTaskLifecycleAndAuth(t *testing.T) {
 	if res.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatal("意外开放了任务执行路由")
 	}
+	res, _ = call("POST", "/v1/tasks", body, true)
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatal("未实现的正式异步任务 API 不应由准备接口接管")
+	}
 	res, cancelled := call("DELETE", "/v1/task-preparations/"+id, "", true)
 	if res.StatusCode != http.StatusOK || cancelled["task"].(map[string]any)["status"] != tasks.Cancelled {
 		t.Fatalf("任务取消失败: %d %+v", res.StatusCode, cancelled)
