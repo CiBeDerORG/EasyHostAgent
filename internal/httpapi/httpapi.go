@@ -18,7 +18,6 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
-	"github.com/CiBeDerORG/EasyHostAgent/internal/tasks"
 )
 
 func NewHandler(state identity.State, platform, version string, stores ...*pairing.Store) http.Handler {
@@ -36,11 +35,6 @@ func NewHandlerWithDocker(state identity.State, platform, version string, servic
 }
 
 func NewHandlerWithBundles(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, stores ...*pairing.Store) http.Handler {
-	return NewHandlerWithTaskAdmission(state, platform, version, service, engine, cache, nil, stores...)
-}
-
-// NewHandlerWithTaskAdmission 仅开放部署任务的持久准备与取消，不包含执行器。
-func NewHandlerWithTaskAdmission(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, taskStore *tasks.Store, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -76,9 +70,6 @@ func NewHandlerWithTaskAdmission(state identity.State, platform, version string,
 		}
 		if cache != nil {
 			registerBundles(mux, state.AgentID, store, cache)
-		}
-		if taskStore != nil {
-			registerTasks(mux, state.AgentID, store, taskStore)
 		}
 		mux.HandleFunc("/v1/pairings", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost {

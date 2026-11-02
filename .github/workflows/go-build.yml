@@ -26,7 +26,7 @@ jobs:
       - name: Check gofmt
         run: |
           gofmt -l cmd internal | tee /tmp/unformatted-go
-          gofmt -d cmd/easyhostagent/main.go internal/tasks/*.go internal/bundles/manifest.go internal/pairing/grant_local.go | head -n 2500
+          gofmt -d cmd/easyhostagent/main.go cmd/easyhostagent/local_trust_test.go internal/bundles/candidate.go internal/trust/store.go internal/trust/store_test.go | head -n 600
           test ! -s /tmp/unformatted-go
       - name: Run go vet
         run: go vet ./...
