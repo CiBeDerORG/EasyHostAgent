@@ -21,11 +21,11 @@ import (
 )
 
 const (
-	agentID = "11111111-1111-4111-8111-111111111111"
+	agentID      = "11111111-1111-4111-8111-111111111111"
 	controllerID = "22222222-2222-4222-8222-222222222222"
-	deviceID = "33333333-3333-4333-8333-333333333333"
-	sourceID = "44444444-4444-4444-8444-444444444444"
-	gitRevision = "0123456789abcdef0123456789abcdef01234567"
+	deviceID     = "33333333-3333-4333-8333-333333333333"
+	sourceID     = "44444444-4444-4444-8444-444444444444"
+	gitRevision  = "0123456789abcdef0123456789abcdef01234567"
 )
 
 func candidateZIP(t *testing.T) []byte {
@@ -73,13 +73,14 @@ func candidateZIP(t *testing.T) []byte {
 }
 
 type testEnvironment struct {
-	dir string
-	grants *pairing.Store
+	dir       string
+	grants    *pairing.Store
 	approvals *trust.Store
-	tasks *Store
-	digest string
-	token string
+	tasks     *Store
+	digest    string
+	token     string
 }
+
 func setup(t *testing.T) testEnvironment {
 	t.Helper()
 	dir := t.TempDir()
