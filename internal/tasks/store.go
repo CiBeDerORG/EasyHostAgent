@@ -22,51 +22,51 @@ import (
 
 var (
 	ErrUnauthorized = errors.New("当前控制中心授权无效")
-	ErrConflict = errors.New("部署意图与已预留应用资源冲突")
-	ErrNotFound = errors.New("部署任务不存在")
-	ErrCorrupt = errors.New("任务存储损坏，拒绝创建或执行")
-	ErrInvalid = errors.New("部署任务请求不合法")
-	taskUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-	appID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
+	ErrConflict     = errors.New("部署意图与已预留应用资源冲突")
+	ErrNotFound     = errors.New("部署任务不存在")
+	ErrCorrupt      = errors.New("任务存储损坏，拒绝创建或执行")
+	ErrInvalid      = errors.New("部署任务请求不合法")
+	taskUUID        = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	appID           = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
 )
 
 const (
-	Prepared = "prepared"
-	Cancelled = "cancelled"
+	Prepared   = "prepared"
+	Cancelled  = "cancelled"
 	Superseded = "superseded"
-	maxTasks = 2048
+	maxTasks   = 2048
 )
 
 type Input struct {
-	RequestID string `json:"request_id"`
-	Action string `json:"action"`
+	RequestID    string `json:"request_id"`
+	Action       string `json:"action"`
 	BundleSHA256 string `json:"bundle_sha256"`
 }
 
 type Task struct {
-	ID string `json:"id"`
-	AgentID string `json:"agent_id"`
-	ControllerID string `json:"controller_id"`
-	DeviceID string `json:"device_id"`
-	GrantAt string `json:"grant_at"`
-	RequestID string `json:"request_id"`
-	Action string `json:"action"`
-	BundleSHA256 string `json:"bundle_sha256"`
-	SourceID string `json:"source_id"`
-	ApplicationID string `json:"application_id"`
-	GitRevision string `json:"git_revision"`
-	ManifestSHA256 string `json:"manifest_sha256"`
-	Status string `json:"status"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-	ExecutionEnabled bool `json:"execution_enabled"`
+	ID               string `json:"id"`
+	AgentID          string `json:"agent_id"`
+	ControllerID     string `json:"controller_id"`
+	DeviceID         string `json:"device_id"`
+	GrantAt          string `json:"grant_at"`
+	RequestID        string `json:"request_id"`
+	Action           string `json:"action"`
+	BundleSHA256     string `json:"bundle_sha256"`
+	SourceID         string `json:"source_id"`
+	ApplicationID    string `json:"application_id"`
+	GitRevision      string `json:"git_revision"`
+	ManifestSHA256   string `json:"manifest_sha256"`
+	Status           string `json:"status"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+	ExecutionEnabled bool   `json:"execution_enabled"`
 }
 
 type Store struct {
-	dir string
+	dir     string
 	agentID string
-	grants *pairing.Store
-	trust *trust.Store
+	grants  *pairing.Store
+	trust   *trust.Store
 }
 
 func New(dataDir, agentID string, grants *pairing.Store, approvals *trust.Store) (*Store, error) {
