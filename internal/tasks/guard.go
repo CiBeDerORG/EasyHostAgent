@@ -20,8 +20,8 @@ type DockerInventory interface {
 	InspectGrouped(context.Context) (dockerengine.GroupedInventory, error)
 }
 type resourceGuard struct {
-	cache *bundles.Store
-	docker DockerInventory
+	cache        *bundles.Store
+	docker       DockerInventory
 	softwareRoot string
 }
 
