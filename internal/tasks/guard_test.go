@@ -1,7 +1,9 @@
 package tasks
 
 import (
+	"bytes"
 	"context"
+	"os"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -183,5 +185,32 @@ data:
 		if _, err := ParseFootprint([]byte(raw), "sub2api"); err == nil {
 			t.Fatalf("模糊或危险资源声明 #%d 被误判为合法", i)
 		}
+	}
+}
+
+func TestPersistedResourceClaimTamperingCannotReleaseLocks(t *testing.T) {
+	env, queue, _ := guardedFixture(t)
+	task, _, err := queue.Submit(controllerID, env.token, input(env.digest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(env.dir, "tasks", task.ID+".json")
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged := bytes.Replace(raw, []byte(`"published": 7010`), []byte(`"published": 7100`), 1)
+	if bytes.Equal(forged, raw) {
+		t.Fatal("未找到可供篡改测试的持久资源声明")
+	}
+	if err := os.WriteFile(file, forged, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := queue.Preflight(controllerID, env.token, task.ID); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("被篡改的资源指纹通过执行前预检: %v", err)
+	}
+	if _, _, err := queue.Submit(controllerID, env.token,
+		Input{RequestID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", Action: "install", BundleSHA256: env.digest}); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("被篡改的历史预留未能阻止新任务: %v", err)
 	}
 }
