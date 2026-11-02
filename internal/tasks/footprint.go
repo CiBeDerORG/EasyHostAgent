@@ -17,37 +17,41 @@ import (
 
 // PortClaim 仅表示静态 Manifest 的默认值。运行时参数未支持，缺少默认值一律拒绝。
 type PortClaim struct {
-	HostIP string `json:"host_ip"`
+	HostIP    string `json:"host_ip"`
 	Published uint16 `json:"published"`
-	Protocol string `json:"protocol"`
+	Protocol  string `json:"protocol"`
 }
 type Footprint struct {
-	ComposeProject string `json:"compose_project"`
-	Ports []PortClaim `json:"ports"`
-	NamedVolumes []string `json:"named_volumes"`
-	DataPaths []string `json:"data_paths"`
+	ComposeProject string      `json:"compose_project"`
+	Ports          []PortClaim `json:"ports"`
+	NamedVolumes   []string    `json:"named_volumes"`
+	DataPaths      []string    `json:"data_paths"`
 }
 type configValue struct {
-	Key string `yaml:"key"`
-	Type string `yaml:"type"`
-	Default any `yaml:"default"`
+	Key     string `yaml:"key"`
+	Type    string `yaml:"type"`
+	Default any    `yaml:"default"`
 }
 type manifestClaim struct {
-	SchemaVersion int `yaml:"schema_version"`
-	ID string `yaml:"id"`
-	Runtime struct { Kind string `yaml:"kind"`; Project string `yaml:"compose_project"` } `yaml:"runtime"`
+	SchemaVersion int    `yaml:"schema_version"`
+	ID            string `yaml:"id"`
+	Runtime       struct {
+		Kind    string `yaml:"kind"`
+		Project string `yaml:"compose_project"`
+	} `yaml:"runtime"`
 	Config []configValue `yaml:"config"`
-	Ports []struct {
-		Protocol string `yaml:"protocol"`
+	Ports  []struct {
+		Protocol    string `yaml:"protocol"`
 		HostPortKey string `yaml:"host_port_key"`
-		BindKey string `yaml:"bind_address_key"`
+		BindKey     string `yaml:"bind_address_key"`
 	} `yaml:"ports"`
 	Data struct {
-		Paths []string `yaml:"paths"`
-		NamedVolumes []string `yaml:"named_volumes"`
-		DefaultRetain bool `yaml:"default_retain"`
+		Paths         []string `yaml:"paths"`
+		NamedVolumes  []string `yaml:"named_volumes"`
+		DefaultRetain bool     `yaml:"default_retain"`
 	} `yaml:"data"`
 }
+
 var safeVolume = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,127}$`)
 
 // validateNode 在解析前拒绝 YAML 重复键、别名、合并映射及自定义类型，避免资源声明歧义。
@@ -125,8 +129,8 @@ func ParseFootprint(raw []byte, approvedApp string) (Footprint, error) {
 		}
 		config[value.Key] = value
 	}
-	result := Footprint{ComposeProject:m.Runtime.Project,Ports:[]PortClaim{},
-		NamedVolumes:[]string{},DataPaths:[]string{}}
+	result := Footprint{ComposeProject: m.Runtime.Project, Ports: []PortClaim{},
+		NamedVolumes: []string{}, DataPaths: []string{}}
 	usedPorts := map[string]bool{}
 	for _, item := range m.Ports {
 		kind := config[item.HostPortKey]
@@ -150,78 +154,84 @@ func ParseFootprint(raw []byte, approvedApp string) (Footprint, error) {
 		if protocol != "tcp" && protocol != "udp" {
 			return Footprint{}, ErrInvalid
 		}
-		claim := PortClaim{HostIP:hostIP,Published:uint16(num),Protocol:protocol}
-		key := fmt.Sprintf("%s/%s/%d",claim.Protocol,claim.HostIP,claim.Published)
+		claim := PortClaim{HostIP: hostIP, Published: uint16(num), Protocol: protocol}
+		key := fmt.Sprintf("%s/%s/%d", claim.Protocol, claim.HostIP, claim.Published)
 		if usedPorts[key] {
 			return Footprint{}, ErrInvalid
 		}
 		usedPorts[key] = true
-		result.Ports = append(result.Ports,claim)
+		result.Ports = append(result.Ports, claim)
 	}
 	for _, name := range m.Data.NamedVolumes {
 		if !safeVolume.MatchString(name) {
 			return Footprint{}, ErrInvalid
 		}
-		result.NamedVolumes = append(result.NamedVolumes,name)
+		result.NamedVolumes = append(result.NamedVolumes, name)
 	}
 	for _, pathname := range m.Data.Paths {
-		if !validDataPath(approvedApp,pathname) {
+		if !validDataPath(approvedApp, pathname) {
 			return Footprint{}, ErrInvalid
 		}
-		result.DataPaths = append(result.DataPaths,pathname)
+		result.DataPaths = append(result.DataPaths, pathname)
 	}
 	if len(result.Ports) > 128 || len(result.NamedVolumes) > 128 || len(result.DataPaths) > 128 {
 		return Footprint{}, ErrInvalid
 	}
-	sort.Slice(result.Ports,func(i,j int) bool {
-		a,b:=result.Ports[i],result.Ports[j]
-		return fmt.Sprint(a.Protocol,a.HostIP,a.Published)<fmt.Sprint(b.Protocol,b.HostIP,b.Published)
+	sort.Slice(result.Ports, func(i, j int) bool {
+		a, b := result.Ports[i], result.Ports[j]
+		return fmt.Sprint(a.Protocol, a.HostIP, a.Published) < fmt.Sprint(b.Protocol, b.HostIP, b.Published)
 	})
 	sort.Strings(result.NamedVolumes)
 	sort.Strings(result.DataPaths)
-	for _, values := range [][]string{result.NamedVolumes,result.DataPaths} {
-		for i:=1;i<len(values);i++ {
-			if values[i]==values[i-1] {
+	for _, values := range [][]string{result.NamedVolumes, result.DataPaths} {
+		for i := 1; i < len(values); i++ {
+			if values[i] == values[i-1] {
 				return Footprint{}, ErrInvalid
 			}
 		}
 	}
-	return result,nil
+	return result, nil
 }
 
-func portOverlaps(a,b PortClaim) bool {
+func portOverlaps(a, b PortClaim) bool {
 	if a.Protocol != b.Protocol || a.Published != b.Published {
 		return false
 	}
-	return a.HostIP==b.HostIP || a.HostIP=="0.0.0.0" || b.HostIP=="0.0.0.0" ||
-		a.HostIP=="" || b.HostIP==""
+	return a.HostIP == b.HostIP || a.HostIP == "0.0.0.0" || b.HostIP == "0.0.0.0" ||
+		a.HostIP == "" || b.HostIP == ""
 }
-func claimsConflict(a,b Footprint) bool {
-	if a.ComposeProject=="" || b.ComposeProject=="" || a.ComposeProject==b.ComposeProject {
+func claimsConflict(a, b Footprint) bool {
+	if a.ComposeProject == "" || b.ComposeProject == "" || a.ComposeProject == b.ComposeProject {
 		return true
 	}
-	for _, left:=range a.Ports {
-		for _,right:=range b.Ports {
-			if portOverlaps(left,right) {
+	for _, left := range a.Ports {
+		for _, right := range b.Ports {
+			if portOverlaps(left, right) {
 				return true
 			}
 		}
 	}
-	for _,left:=range a.NamedVolumes {
-		for _,right:=range b.NamedVolumes {
-			if left==right {return true}
+	for _, left := range a.NamedVolumes {
+		for _, right := range b.NamedVolumes {
+			if left == right {
+				return true
+			}
 		}
 	}
-	for _,left:=range a.DataPaths {
-		for _,right:=range b.DataPaths {
-			if left==right || strings.HasPrefix(left,right+"/") || strings.HasPrefix(right,left+"/") {return true}
+	for _, left := range a.DataPaths {
+		for _, right := range b.DataPaths {
+			if left == right || strings.HasPrefix(left, right+"/") || strings.HasPrefix(right, left+"/") {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-func parsePortNumber(value string) (uint16,error) {
-	n,err:=strconv.Atoi(value)
-	if err!=nil || n<1 || n>65535 {return 0,ErrInvalid}
-	return uint16(n),nil
+func parsePortNumber(value string) (uint16, error) {
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 1 || n > 65535 {
+		return 0, ErrInvalid
+	}
+	return uint16(n), nil
 }
