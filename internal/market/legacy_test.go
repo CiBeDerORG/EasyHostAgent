@@ -227,7 +227,7 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 	cfg := config.Config{SoftwareRoot: root, DataDir: data, Platform: "linux"}
 	agent, err := New(ctx, cfg, testController+"/"+testSource+"/sub2api", cache,
 		func(context.Context) (dockerengine.GroupedInventory, error) {
-			return dockerengine.GroupedInventory{Complete:true, Resources: []dockerengine.Resource{project}}, nil
+			return dockerengine.GroupedInventory{Complete: true, Resources: []dockerengine.Resource{project}}, nil
 		})
 	if err != nil {
 		t.Fatal(err)
