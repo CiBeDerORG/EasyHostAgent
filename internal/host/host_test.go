@@ -77,6 +77,7 @@ func TestRootSafety(t *testing.T) {
 		t.Fatal("accepted symlink root")
 	}
 }
+
 // fnOS keeps Agent state in SOFTWARE_ROOT/easyhostagent/data. The application
 // workspace remains separate, and managed app paths cannot contain Agent state.
 func TestSoftwareRootAllowsSeparateAgentDataDirectory(t *testing.T) {
