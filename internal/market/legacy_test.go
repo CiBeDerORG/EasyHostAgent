@@ -291,9 +291,14 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".easyhostagent-apps")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("不应创建第二套应用工作目录")
 	}
-	// One-time force update cannot re-adopt an already managed record.
-	if _, err := agent.ForceUpdate(ctx, testController, request, func() bool { return true }); !errors.Is(err, ErrConflict) {
-		t.Fatalf("已受管应用不可重复强制接管: %v", err)
+	// 已受管项目的强制更新走普通 update 校验，不会再次接管或建立第二套目录。
+	repeated, err := agent.ForceUpdate(ctx, testController, request, func() bool { return true })
+	if err != nil || repeated.Action != "update" || !repeated.Managed {
+		t.Fatalf("已受管应用应可执行受控强制更新: %+v %v", repeated, err)
+	}
+	agent.jobs.Wait()
+	if _, err := os.Stat(filepath.Join(root, ".easyhostagent-apps")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("重复强制更新不应创建第二套应用目录")
 	}
 }
 
