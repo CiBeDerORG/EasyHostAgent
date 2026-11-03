@@ -16,7 +16,7 @@ const legacyDeployMode = "legacy_deploy"
 // Legacy adoption is deliberately limited to existing Deploy-managed app
 // directories. It never allows a remote caller to supply a shell path.
 func legacyDeployApp(id string) bool {
-	return id == "sub2api" || id == "portainer"
+	return id == "sub2api" || id == "portainer" || id == "mihomo" || id == "opencode"
 }
 
 func (s *Service) legacyWorkdir(app string) string {
@@ -75,7 +75,7 @@ func (s *Service) legacyScript(app, action string) (string, error) {
 func (s *Service) Adopt(ctx context.Context, controller string, req Request, authorized func() bool) (Record, error) {
 	if !req.Ref.valid() || !legacyDeployApp(req.App) ||
 		!bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {
-		return Record{}, errors.New("仅支持接管已验证的 Sub2API 或 Portainer Deploy 部署")
+		return Record{}, errors.New("仅支持接管已验证的 Deploy Docker 应用")
 	}
 	if !s.hasGrant(controller, req.Ref) || !authorized() {
 		return Record{}, ErrDenied
