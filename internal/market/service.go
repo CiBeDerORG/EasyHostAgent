@@ -31,9 +31,9 @@ func (r Ref) valid() bool {
 
 type Request struct {
 	Ref
-	Digest string            `json:"bundle_sha256,omitempty"`
-	Config map[string]string `json:"config,omitempty"`
-	ConfirmExternal bool `json:"confirm_external,omitempty"`
+	Digest          string            `json:"bundle_sha256,omitempty"`
+	Config          map[string]string `json:"config,omitempty"`
+	ConfirmExternal bool              `json:"confirm_external,omitempty"`
 }
 
 type Record struct {
