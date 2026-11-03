@@ -219,9 +219,9 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 	ref := Ref{Source: testSource, App: "sub2api"}
 	digest := legacyBundle(t, cache, ref.App)
 	project := dockerengine.Resource{ComposeProject: ref.App, Status: "running", Containers: []dockerengine.Container{{Labels: map[string]string{
-		"com.docker.compose.project": ref.App,
-		"com.docker.compose.service": "api",
-		"com.docker.compose.project.working_dir": work,
+		"com.docker.compose.project":              ref.App,
+		"com.docker.compose.service":              "api",
+		"com.docker.compose.project.working_dir":  work,
 		"com.docker.compose.project.config_files": filepath.Join(work, "docker-compose.yaml"),
 	}}}}
 	cfg := config.Config{SoftwareRoot: root, DataDir: data, Platform: "linux"}
