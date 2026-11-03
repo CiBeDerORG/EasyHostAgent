@@ -77,12 +77,12 @@ func TestRootSafety(t *testing.T) {
 		t.Fatal("accepted symlink root")
 	}
 }
-// fnOS keeps Agent state in SOFTWARE_ROOT/easyhostagent-data. The application
+// fnOS keeps Agent state in SOFTWARE_ROOT/easyhostagent/data. The application
 // workspace remains separate, and managed app paths cannot contain Agent state.
 func TestSoftwareRootAllowsSeparateAgentDataDirectory(t *testing.T) {
 	base := t.TempDir()
 	root := filepath.Join(base, "software")
-	dataDir := filepath.Join(root, "easyhostagent-data")
+	dataDir := filepath.Join(root, "easyhostagent", "data")
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		t.Fatal(err)
 	}
