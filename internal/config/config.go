@@ -19,6 +19,7 @@ const (
 	DefaultFnOSRoot  = "/vol3/1000/software"
 	DefaultListen    = "0.0.0.0:7014"
 	EnvTransport     = "EASYHOSTAGENT_TRANSPORT"
+	EnvPlatform      = "EASYHOSTAGENT_PLATFORM"
 	EnvDataDir       = "EASYHOSTAGENT_DATA_DIR"
 	EnvSoftwareRoot  = "EASYHOSTAGENT_SOFTWARE_ROOT"
 	EnvLogLevel      = "EASYHOSTAGENT_LOG_LEVEL"
@@ -46,6 +47,16 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 		return Config{}, fmt.Errorf("environment getter is required")
 	}
 	isFn := fnosMarker || isFnOS(osRelease)
+	// 容器内 /etc/os-release 是镜像系统，平台必须由宿主机部署配置明确告知。
+	switch getenv(EnvPlatform) {
+	case "":
+	case "linux":
+		isFn = false
+	case "fnos":
+		isFn = true
+	default:
+		return Config{}, fmt.Errorf("EASYHOSTAGENT_PLATFORM 只能为 linux 或 fnos")
+	}
 	root := getenv(EnvSoftwareRoot)
 	if root == "" {
 		root = DefaultLinuxRoot
