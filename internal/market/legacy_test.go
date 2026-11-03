@@ -386,3 +386,48 @@ func TestLegacyGrantParsingAndBackwardCompatibility(t *testing.T) {
 		}
 	}
 }
+
+func TestHistoricalOpenCodeComposeProjectIsOnlyReadOnlyLinked(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	root := filepath.Join(base, "software")
+	data := filepath.Join(base, "data")
+	if err := os.MkdirAll(data, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := bundles.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{Source: testSource, App: "opencode"}
+	work := filepath.Join(root, "opencode", "deploy")
+	project := dockerengine.Resource{
+		ComposeProject: "deploy",
+		Status:         "running",
+		Containers: []dockerengine.Container{{Labels: map[string]string{
+			"com.docker.compose.project":              "deploy",
+			"com.docker.compose.service":              "opencode",
+			"com.docker.compose.project.working_dir":  work,
+			"com.docker.compose.project.config_files": filepath.Join(work, "docker-compose.yaml"),
+		}}},
+	}
+	svc, err := New(ctx, config.Config{SoftwareRoot: root, DataDir: data, Platform: "linux"},
+		testController+"/"+testSource+"/opencode", cache,
+		func(context.Context) (dockerengine.GroupedInventory, error) {
+			return dockerengine.GroupedInventory{Complete: true, Resources: []dockerengine.Resource{project}}, nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := svc.Status(ctx, testController, []Ref{ref}, false)
+	if err != nil || len(rows) != 1 || rows[0].State != "running" ||
+		!rows[0].External || rows[0].Allowed || rows[0].Adoptable || rows[0].ForceUpdatable ||
+		rows[0].BlockedReason != "legacy_project_name" {
+		t.Fatalf("历史 OpenCode 应仅显示受保护的已运行状态: %+v %v", rows, err)
+	}
+	project.Containers[0].Labels["com.docker.compose.project.working_dir"] = filepath.Join(root, "unrelated", "deploy")
+	rows, err = svc.Status(ctx, testController, []Ref{ref}, false)
+	if err != nil || rows[0].State != "not_installed" || rows[0].External {
+		t.Fatalf("目录不一致不能关联同名容器: %+v %v", rows, err)
+	}
+}
