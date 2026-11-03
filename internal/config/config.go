@@ -18,6 +18,7 @@ const (
 	DefaultLinuxRoot = "/opt/software"
 	DefaultFnOSRoot  = "/vol3/1000/software"
 	DefaultListen    = "0.0.0.0:7014"
+	EnvTransport     = "EASYHOSTAGENT_TRANSPORT"
 	EnvDataDir       = "EASYHOSTAGENT_DATA_DIR"
 	EnvSoftwareRoot  = "EASYHOSTAGENT_SOFTWARE_ROOT"
 	EnvLogLevel      = "EASYHOSTAGENT_LOG_LEVEL"
@@ -29,6 +30,7 @@ type Config struct {
 	DataDir      string
 	SoftwareRoot string
 	ListenAddr   string
+	Transport    string
 	Platform     string
 	LogLevel     slog.Level
 }
@@ -54,6 +56,13 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	dataDir := getenv(EnvDataDir)
 	if dataDir == "" {
 		dataDir = DefaultDataDir
+	}
+	transport := getenv(EnvTransport)
+	if transport == "" {
+		transport = "https"
+	}
+	if transport != "https" && transport != "http" {
+		return Config{}, fmt.Errorf("EASYHOSTAGENT_TRANSPORT 只能为 http 或 https")
 	}
 	listenAddr := getenv(EnvListen)
 	if listenAddr == "" {
@@ -90,7 +99,7 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	if isFn {
 		platform = "fnos"
 	}
-	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Platform: platform, LogLevel: level}, nil
+	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level}, nil
 }
 
 func cleanAbsolute(label, value string) (string, error) {
