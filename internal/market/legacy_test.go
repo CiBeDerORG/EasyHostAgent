@@ -91,6 +91,9 @@ func TestLegacyDeployAdoptionRequiresGrantAndExactComposeIdentity(t *testing.T) 
 		}
 	}
 	data := filepath.Join(base, "agent-data")
+	if err := os.MkdirAll(data, 0700); err != nil {
+		t.Fatal(err)
+	}
 	cache, err := bundles.New(data)
 	if err != nil {
 		t.Fatal(err)
@@ -177,6 +180,9 @@ func TestLegacyDeployAdoptionRequiresGrantAndExactComposeIdentity(t *testing.T) 
 func TestLegacyGrantParsingAndBackwardCompatibility(t *testing.T) {
 	base := t.TempDir()
 	cfg := config.Config{DataDir: filepath.Join(base, "data"), SoftwareRoot: filepath.Join(base, "software"), Platform: "linux"}
+	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	for _, grant := range []string{
 		"nonsense", testController + "/" + testSource + "/",
 		testController + "/" + testSource + "/sub2api/extra",
