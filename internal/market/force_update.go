@@ -4,18 +4,98 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"time"
+	"syscall"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 )
 
-// restoreLegacyScripts repairs only missing or unsafe regular Deploy scripts
-// using the already validated, immutable Git application bundle. Existing
-// safe scripts, Compose configurations, .env, .secrets and data are untouched.
+// backupLegacyTarget saves the exact existing regular file contents, or the
+// literal target of a symlink, without ever following a symlink.
+func (s *Service) backupLegacyTarget(app, name, target string, st os.FileInfo) error {
+	var content []byte
+	if st.Mode()&os.ModeSymlink != 0 {
+		link, err := os.Readlink(target)
+		if err != nil {
+			return err
+		}
+		content = []byte("SYMLINK -> " + link + "\n")
+	} else if st.Mode().IsRegular() {
+		f, err := os.OpenFile(target, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			return err
+		}
+		actual, statErr := f.Stat()
+		if statErr != nil || !actual.Mode().IsRegular() {
+			_ = f.Close()
+			return errors.New("原文件在备份时发生变化")
+		}
+		content, err = io.ReadAll(io.LimitReader(f, (8<<20)+1))
+		closeErr := f.Close()
+		if err != nil || closeErr != nil || len(content) > 8<<20 {
+			return errors.New("原文件读取失败或超过备份大小限制")
+		}
+	} else {
+		return errors.New("原路径不是普通文件或符号链接，拒绝覆盖")
+	}
+	backup := filepath.Join(s.records, fmt.Sprintf("%s-force-update-%s-%d.bak", app, name, time.Now().UnixNano()))
+	out, err := os.OpenFile(backup, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err = out.Write(content); err == nil {
+		err = out.Sync()
+	}
+	closeErr := out.Close()
+	if err != nil {
+		_ = os.Remove(backup)
+		return err
+	}
+	return closeErr
+}
+
+func writeLegacyFile(dir, target string, content []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(dir, ".easyhostagent-force-update-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	// Rename replaces a symlink itself; it never writes through its target.
+	if err := os.Rename(tmpName, target); err != nil {
+		return err
+	}
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
+}
+
+// restoreLegacyScripts repairs missing, unsafe or symlinked Deploy files from
+// the immutable, digest-verified Git bundle. Existing .env, .secrets, data,
+// and safe regular files are deliberately left untouched.
 func (s *Service) restoreLegacyScripts(app string, info bundles.CandidateInfo, files map[string][]byte) error {
 	work := s.legacyWorkdir(app)
 	softwareRoot := filepath.Dir(s.root)
@@ -25,50 +105,61 @@ func (s *Service) restoreLegacyScripts(app string, info bundles.CandidateInfo, f
 			return errors.New("原 Deploy 目录缺失或不安全，不能强制更新")
 		}
 	}
-	compose := filepath.Join(work, "docker-compose.yaml")
-	st, err := os.Lstat(compose)
-	if err != nil || !st.Mode().IsRegular() || st.Mode().Perm()&0022 != 0 {
-		return errors.New("原 Compose 文件缺失或不安全，不能强制更新")
+
+	expected := map[string]os.FileMode{
+		"docker-compose.yaml": 0644,
+		"install.sh":          0755,
+		"update.sh":           0755,
+		"uninstall.sh":        0755,
+		"lib.sh":              0644,
 	}
-	for _, name := range []string{"install.sh", "update.sh", "uninstall.sh"} {
+	required := []string{"docker-compose.yaml", "install.sh", "update.sh", "uninstall.sh"}
+	found := make(map[string]bool, len(expected))
+	prefix := app + "/deploy/"
+	for _, item := range info.Files {
+		if !strings.HasPrefix(item.Destination, prefix) {
+			continue
+		}
+		name := strings.TrimPrefix(item.Destination, prefix)
+		mode, allowed := expected[name]
+		if !allowed || strings.Contains(name, "/") {
+			continue
+		}
+		if item.Mode != "" && item.Mode != fmt.Sprintf("%04o", mode.Perm()) {
+			return fmt.Errorf("可信应用包中的 %s 文件权限声明不符合预期", name)
+		}
+		raw, ok := files[item.Destination]
+		if !ok || int64(len(raw)) != item.SizeBytes {
+			return fmt.Errorf("可信应用包缺少完整的 %s 文件，无法恢复", name)
+		}
 		target := filepath.Join(work, name)
 		st, err := os.Lstat(target)
 		if err == nil && st.Mode().IsRegular() && st.Mode().Perm()&0022 == 0 {
+			found[name] = true
 			continue
 		}
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return errors.New("无法检查原 Deploy 脚本")
-		}
-		if err == nil && !st.Mode().IsRegular() {
-			return errors.New("原 Deploy 脚本不是普通文件，拒绝覆盖")
-		}
-		bundlePath := app + "/deploy/" + name
-		raw, ok := files[bundlePath]
-		if !ok || len(raw) == 0 {
-			return fmt.Errorf("受控应用包缺少 %s，无法修复", name)
-		}
-		approved := false
-		for _, item := range info.Files {
-			if item.Destination == bundlePath && item.Mode == "0755" {
-				approved = true
-				break
-			}
-		}
-		if !approved {
-			return errors.New("应用清单没有授权该脚本")
+			return fmt.Errorf("检查原 Deploy 文件 %s 失败", name)
 		}
 		if err == nil {
-			backup := filepath.Join(s.records, fmt.Sprintf("%s-force-update-%s-%d.bak", app, name, time.Now().UnixNano()))
-			old, readErr := os.ReadFile(target)
-			if readErr != nil || writeFile(backup, old, 0600) != nil {
-				return errors.New("备份不安全的旧脚本失败，拒绝覆盖")
+			if !st.Mode().IsRegular() && st.Mode()&os.ModeSymlink == 0 {
+				return fmt.Errorf("原 Deploy 文件 %s 是特殊文件，拒绝覆盖", name)
+			}
+			if err := s.backupLegacyTarget(app, name, target, st); err != nil {
+				return fmt.Errorf("备份原 Deploy 文件 %s 失败，未覆盖原文件", name)
 			}
 		}
-		if err := writeFile(target, raw, 0755); err != nil {
-			return errors.New("修复原 Deploy 脚本失败")
+		if err := writeLegacyFile(work, target, raw, mode); err != nil {
+			return fmt.Errorf("从可信应用包恢复 Deploy 文件 %s 失败", name)
+		}
+		found[name] = true
+	}
+	for _, name := range required {
+		if !found[name] {
+			return fmt.Errorf("固定 Git 应用包未提供 deploy/%s，不能强制更新", name)
 		}
 	}
-	_, err = s.legacyScript(app, "update")
+	_, err := s.legacyScript(app, "update")
 	return err
 }
 
