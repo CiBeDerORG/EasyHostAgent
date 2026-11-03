@@ -75,8 +75,8 @@ func New(dataDir, defaultRoot, platform, agentID string) (*Service, error) {
 	return s, nil
 }
 func validateRoot(dataDir, root string) error {
-	// Agent state may live directly under SOFTWARE_ROOT (e.g. fnOS:
-	// /vol3/1000/software/easyhostagent-data), but must never overlap the
+	// Agent state may live below SOFTWARE_ROOT (e.g. fnOS:
+	// /vol3/1000/software/easyhostagent/data). Keep it separate from the
 	// managed-app workspace SOFTWARE_ROOT/.easyhostagent-apps.
 	appsRoot := filepath.Join(root, ".easyhostagent-apps")
 	if root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root || root == "/" ||
