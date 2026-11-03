@@ -40,7 +40,7 @@ func registerMarket(mux *http.ServeMux, agentID string, store *pairing.Store, ap
 			sendJSON(w, map[string]any{"apps": rows})
 			return
 		}
-		if name != "install" && name != "update" && name != "uninstall" {
+		if name != "install" && name != "update" && name != "uninstall" && name != "adopt" {
 			http.NotFound(w, r)
 			return
 		}
@@ -50,7 +50,14 @@ func registerMarket(mux *http.ServeMux, agentID string, store *pairing.Store, ap
 			return
 		}
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		rec, err := apps.Start(r.Context(), controller, name, req, func() bool { return store.Authorized(controller, agentID, token) })
+		authorized := func() bool { return store.Authorized(controller, agentID, token) }
+		var rec market.Record
+		var err error
+		if name == "adopt" {
+			rec, err = apps.Adopt(r.Context(), controller, req, authorized)
+		} else {
+			rec, err = apps.Start(r.Context(), controller, name, req, authorized)
+		}
 		if err != nil {
 			status := 422
 			switch {
