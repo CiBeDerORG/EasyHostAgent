@@ -177,6 +177,113 @@ func TestLegacyDeployAdoptionRequiresGrantAndExactComposeIdentity(t *testing.T) 
 	}
 }
 
+func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	root := filepath.Join(base, "software")
+	work := filepath.Join(root, "sub2api", "deploy")
+	if err := os.MkdirAll(work, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"docker-compose.yaml", "install.sh", "update.sh"} {
+		if err := os.WriteFile(filepath.Join(work, name), []byte("echo ok\n"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Existing update script is the actual original Deploy entrypoint.
+	if err := os.WriteFile(filepath.Join(work, "update.sh"), []byte("printf updated > ../updated\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	dataFile := filepath.Join(root, "sub2api", "data", "postgres", "sentinel")
+	if err := os.MkdirAll(filepath.Dir(dataFile), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dataFile, []byte("do-not-change"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	secrets := filepath.Join(root, "deploy", ".secrets")
+	if err := os.MkdirAll(filepath.Dir(secrets), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secrets, []byte("SENSITIVE=unchanged\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	data := filepath.Join(base, "agent-data")
+	if err := os.MkdirAll(data, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := bundles.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{Source: testSource, App: "sub2api"}
+	digest := legacyBundle(t, cache, ref.App)
+	project := dockerengine.Resource{ComposeProject: ref.App, Status: "running", Containers: []dockerengine.Container{{Labels: map[string]string{
+		"com.docker.compose.project": ref.App,
+		"com.docker.compose.service": "api",
+		"com.docker.compose.project.working_dir": work,
+		"com.docker.compose.project.config_files": filepath.Join(work, "docker-compose.yaml"),
+	}}}}
+	cfg := config.Config{SoftwareRoot: root, DataDir: data, Platform: "linux"}
+	agent, err := New(ctx, cfg, testController+"/"+testSource+"/sub2api", cache,
+		func(context.Context) (dockerengine.GroupedInventory, error) {
+			return dockerengine.GroupedInventory{Complete:true, Resources: []dockerengine.Resource{project}}, nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := agent.Status(ctx, testController, []Ref{ref}, false)
+	if err != nil || len(rows) != 1 || !rows[0].ForceUpdatable || rows[0].BlockedReason != "legacy_scripts_missing" {
+		t.Fatalf("旧 Deploy 缺卸载脚本时应可申请强制更新: %+v %v", rows, err)
+	}
+	request := Request{Ref: ref, Digest: digest, ConfirmExternal: true}
+	for _, bad := range []struct{ controller string; confirm bool; authorized bool }{
+		{testController, false, true},
+		{"wrong-controller", true, true},
+		{testController, true, false},
+	} {
+		request.ConfirmExternal = bad.confirm
+		_, err := agent.ForceUpdate(ctx, bad.controller, request, func() bool { return bad.authorized })
+		if err == nil {
+			t.Fatal("强制更新不得绕过用户确认或本机授权")
+		}
+	}
+	request.ConfirmExternal = true
+	project.Containers[0].Labels["com.docker.compose.project.config_files"] = "/tmp/unrelated.yaml"
+	if _, err := agent.ForceUpdate(ctx, testController, request, func() bool { return true }); !errors.Is(err, ErrConflict) {
+		t.Fatalf("不能接管同名其他项目: %v", err)
+	}
+	project.Containers[0].Labels["com.docker.compose.project.config_files"] = filepath.Join(work, "docker-compose.yaml")
+	accepted, err := agent.ForceUpdate(ctx, testController, request, func() bool { return true })
+	if err != nil || !accepted.Managed || accepted.Mode != legacyDeployMode || accepted.Action != "update" || accepted.Result != "running" {
+		t.Fatalf("强制更新未正确受理: %+v %v", accepted, err)
+	}
+	agent.jobs.Wait()
+	rec, err := agent.read(ref.App)
+	if err != nil || rec.Result != "succeeded" || rec.Action != "update" {
+		t.Fatalf("强制更新没有成功完成: %+v %v", rec, err)
+	}
+	if content, err := os.ReadFile(filepath.Join(root, "sub2api", "updated")); err != nil || string(content) != "updated" {
+		t.Fatal("没有实际执行既有 Deploy update.sh")
+	}
+	if st, err := os.Stat(filepath.Join(work, "uninstall.sh")); err != nil || st.Mode().Perm() != 0755 {
+		t.Fatal("没有从可信包修复缺失的卸载脚本")
+	}
+	for path, expected := range map[string]string{dataFile: "do-not-change", secrets: "SENSITIVE=unchanged\n"} {
+		actual, err := os.ReadFile(path)
+		if err != nil || string(actual) != expected {
+			t.Fatalf("强制更新修改了原始数据或凭据: %s %v", path, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, ".easyhostagent-apps")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("不应创建第二套应用工作目录")
+	}
+	// One-time force update cannot re-adopt an already managed record.
+	if _, err := agent.ForceUpdate(ctx, testController, request, func() bool { return true }); !errors.Is(err, ErrConflict) {
+		t.Fatalf("已受管应用不可重复强制接管: %v", err)
+	}
+}
+
 func TestLegacyGrantParsingAndBackwardCompatibility(t *testing.T) {
 	base := t.TempDir()
 	cfg := config.Config{DataDir: filepath.Join(base, "data"), SoftwareRoot: filepath.Join(base, "software"), Platform: "linux"}
