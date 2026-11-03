@@ -1,19 +1,19 @@
 # EasyHostAgent
 
-EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机代理。**EasyNetTopo V1.0 是首个正式对接控制端**；一台 Agent 同时只允许一个有效控制端授权，成功重新配对会撤销旧授权。Agent 不依赖 EasyTier 组网，可以通过直接可达的 IP:port + HTTPS 管理。
+EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机代理。**EasyNetTopo V1.0 是首个正式对接控制端**；一台 Agent 同时只允许一个有效控制端授权，成功重新配对会撤销旧授权。Agent 不依赖 EasyTier 组网，可通过直接可达的 IP:port + HTTPS 管理，也可在可信网络显式启用 HTTP。
 
-支持 HTTPS 身份配对、Docker/Compose 资源发现和按摘要缓存应用包。主机管理员授权指定应用源后，控制端可安装、卸载并批量查询 Docker 应用。详见本文「Docker 应用商店」。下文 T01/T02 和 M3 章节保留各阶段的开发记录。
+支持 HTTP/HTTPS 身份配对、Docker/Compose 资源发现和按摘要缓存应用包。主机管理员授权指定应用源后，控制端可安装、卸载并批量查询 Docker 应用。详见本文「Docker 应用商店」。下文 T01/T02 和 M3 章节保留各阶段的开发记录。
 
 ## 工程结构
 
 ```text
 cmd/easyhostagent/       CLI 入口（-version、-check-config、-identity、-pairing-code）
-internal/app/            TLS 1.3 服务生命周期与优雅退出
+internal/app/            HTTP / TLS 1.3 HTTPS 服务生命周期与优雅退出
 internal/config/         软件根目录、状态目录、日志等级
 internal/logging/        标准库 log/slog JSON 结构化日志
 internal/buildinfo/      构建版本元数据
 internal/identity/       私有身份状态文件、Agent UUID、TLS 证书与指纹
-internal/httpapi/        HTTPS health / identity / pairings API
+internal/httpapi/        HTTP/HTTPS health / identity / pairings 与应用操作 API
 internal/auth/           Bearer + Controller/Agent ID 鉴权中间件
 internal/pairing/        一次性配对窗口与持久授权仓库
 docs/                    架构与协议文档
@@ -141,8 +141,11 @@ HTTP 配对契约：
 | `EASYHOSTAGENT_SOFTWARE_ROOT` | `/opt/software` | `/vol3/1000/software` |
 | `EASYHOSTAGENT_LOG_LEVEL` | `info` | `info` |
 | `EASYHOSTAGENT_LISTEN_ADDRESS` | `0.0.0.0:7014` | `0.0.0.0:7014` |
+| `EASYHOSTAGENT_TRANSPORT` | `https` | `https` |
 
 FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-release` 进行保守的识别；用户可使用 `EASYHOSTAGENT_SOFTWARE_ROOT` 明确覆盖。后续 T01-07 负责完善 FnOS 兼容与 UI 可配置路径，以及存在受管应用时禁止直接迁移目录的业务规则。
+
+**HTTP 模式（可选）**：在 `/etc/easyhostagent/agent.env` 设置 `EASYHOSTAGENT_TRANSPORT=http` 和 `EASYHOSTAGENT_LISTEN_ADDRESS=0.0.0.0:7014`（或可信网卡的具体 IP），随后重启 `easyhostagent.service`。EasyNetTopo 中登记 `http://<Agent-IP>:7014`；不写协议的旧格式 `IP:7014` 仍默认为 HTTPS。HTTP 使用与 HTTPS 相同的配对码、Bearer Token、来源授权和安装/卸载/状态接口，但**没有传输加密，登录令牌、安装参数及返回信息可能被旁路读取或篡改**，只能用于可信隔离网络，禁止直接暴露公网；强烈建议使用 HTTPS。服务不会主动发送心跳，不会定时轮询控制端。
 
 配置校验仅读取参数，不会创建目录、修改文件或运行 Docker。身份命令首次调用时会写入本地受保护的状态；配对码仅经本地 CLI 显示。日志使用 JSON Lines，标准输出由 systemd/journald 收集。
 
@@ -156,6 +159,6 @@ FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-rele
 
 配对后，管理员从 EasyNetTopo 页面核对控制端 ID 和 Git 来源 ID，在主机的 `/etc/easyhostagent/agent.env` 设置 `EASYHOSTAGENT_APP_GRANTS=<控制端UUID>/<来源UUID>`，然后重启 Agent。多个授权用逗号分隔。移除授权并重启即停止接受该来源的新操作。未设置时仍可查询状态。授权意味着信任该控制端为指定来源选择和传送脚本，脚本以 Agent 服务用户身份执行。
 
-控制端通过已配对的 HTTPS 连接调用 `POST /v1/apps/install`、`uninstall`、`status`（三个接口共用 `/v1/apps/` 前缀）。安装传 `source_id`、`app_id`、`bundle_sha256` 和清单允许的 `config`；卸载只传前两项。批量查询传 `{"apps":[{"source_id":"…","app_id":"…"}],"include_managed":true}`。动作受理后返回当前结果，后续查询同时获得执行结果和 Docker 运行状态。每台主机同时执行一个应用操作。
+控制端通过已配对的 HTTP 或 HTTPS 连接调用 `POST /v1/apps/install`、`uninstall`、`status`（三个接口共用 `/v1/apps/` 前缀）。安装传 `source_id`、`app_id`、`bundle_sha256` 和清单允许的 `config`；卸载只传前两项。批量查询传 `{"apps":[{"source_id":"…","app_id":"…"}],"include_managed":true}`。动作受理后返回当前结果，后续查询同时获得执行结果和 Docker 运行状态。每台主机同时执行一个应用操作。
 
 每个应用使用独立的软件根目录 `<SOFTWARE_ROOT>/.easyhostagent-apps/<来源UUID>/<应用ID>/`。该目录下的 `deploy/.env` 和 `deploy/.secrets` 保存普通配置和密钥，卸载保留配置和应用数据。软件根目录及上级须防止被其他用户替换。脚本应按字面量读取这两份配置，每行 `KEY=VALUE`，读取时去除一层成对引号；禁止把配置作为 Shell 代码执行。包内脚本输出可能包含初始密码，接口仅返回结果与退出码。
