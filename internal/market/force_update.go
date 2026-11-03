@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"time"
 	"syscall"
+	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 )
