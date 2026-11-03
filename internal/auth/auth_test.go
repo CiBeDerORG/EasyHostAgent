@@ -77,9 +77,9 @@ func TestConfiguredHTTPStillRequiresControllerAuthorization(t *testing.T) {
 		r    *http.Request
 		want int
 	}{
-		{"默认拒绝明文", request(false, "Bearer " + token), http.StatusBadRequest},
+		{"默认拒绝明文", request(false, "Bearer "+token), http.StatusBadRequest},
 		{"明文仍校验令牌", request(true, "Bearer wrong"), http.StatusUnauthorized},
-		{"授权明文允许", request(true, "Bearer " + token), http.StatusNoContent},
+		{"授权明文允许", request(true, "Bearer "+token), http.StatusNoContent},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
