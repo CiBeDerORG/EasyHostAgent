@@ -42,6 +42,20 @@ func (s *Service) validLegacyProject(p dockerengine.Resource, app string) bool {
 	return true
 }
 
+// 历史 OpenCode Compose 没有 name 字段，项目名可能是目录名 deploy。
+// 仅在唯一容器的目录、服务及配置文件均匹配时关联只读状态，不授予管理权限。
+func (s *Service) legacyOpenCodeProject(p dockerengine.Resource) bool {
+	if p.ComposeProject != "deploy" || len(p.Containers) != 1 {
+		return false
+	}
+	work := s.legacyWorkdir("opencode")
+	c := p.Containers[0]
+	return c.Labels["com.docker.compose.project"] == "deploy" &&
+		c.Labels["com.docker.compose.service"] == "opencode" &&
+		c.Labels["com.docker.compose.project.working_dir"] == work &&
+		c.Labels["com.docker.compose.project.config_files"] == filepath.Join(work, "docker-compose.yaml")
+}
+
 // Check the current, pre-existing Deploy scripts only in the fixed legacy
 // path. Never follow a symlink or execute scripts supplied as request params.
 func (s *Service) legacyScript(app, action string) (string, error) {
