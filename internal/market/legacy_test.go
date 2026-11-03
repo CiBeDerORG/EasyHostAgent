@@ -279,7 +279,7 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 		t.Fatal("没有从可信包修复缺失的卸载脚本")
 	}
 	compose, err := os.ReadFile(filepath.Join(work, "docker-compose.yaml"))
-	if err != nil || string(compose) != "services: {api: {image: example}}\\n" {
+	if err != nil || string(compose) != "services: {api: {image: example}}\n" {
 		t.Fatalf("没有从固定 Git 应用包恢复缺失的 Compose 文件: %q %v", compose, err)
 	}
 	for path, expected := range map[string]string{dataFile: "do-not-change", secrets: "SENSITIVE=unchanged\n"} {
@@ -306,7 +306,7 @@ func TestForceUpdateRepairsUnsafeComposeAndBacksItUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	composePath := filepath.Join(work, "docker-compose.yaml")
-	if err := os.WriteFile(composePath, []byte("services: {}\\n"), 0666); err != nil {
+	if err := os.WriteFile(composePath, []byte("services: {}\n"), 0666); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(composePath, 0666); err != nil {
@@ -334,7 +334,7 @@ func TestForceUpdateRepairsUnsafeComposeAndBacksItUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	actual, err := os.ReadFile(composePath)
-	if err != nil || string(actual) != "services: {api: {image: example}}\\n" {
+	if err != nil || string(actual) != "services: {api: {image: example}}\n" {
 		t.Fatalf("不安全 Compose 文件没有被可信版本替换: %q %v", actual, err)
 	}
 	st, err := os.Stat(composePath)
