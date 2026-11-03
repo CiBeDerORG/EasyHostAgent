@@ -271,7 +271,7 @@ func readConfig(path string) (*configFile, error) {
 
 func prepareConfig(root string, fields []field, input map[string]string, update bool) (map[string]string, error) {
 	dir := filepath.Join(root, "deploy")
-	if err := privateDir(dir); err != nil {
+	if err := trustedManagedDir(dir); err != nil {
 		return nil, err
 	}
 	configs := map[string]*configFile{}

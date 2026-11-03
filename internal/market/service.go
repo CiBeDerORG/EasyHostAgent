@@ -185,7 +185,7 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 				// Existing Agent-managed apps use private workspace labels.
 				// An explicitly adopted legacy Deploy app must still match
 				// its original, fixed Compose directory on every scan.
-				row.External = !r.Managed || r.Mode == "legacy_deploy" && !legacyMatch
+				row.External = !r.Managed || (r.Mode == legacyDeployMode || r.Mode == directDeployMode) && !legacyMatch
 				if row.External {
 					row.Allowed = false
 					if !s.hasGrant(controller, ref) {
@@ -349,6 +349,11 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 			s.legacyWorkdir(req.App), nil, authorized)
 		return rec, nil
 	}
+	// 标准 Deploy 清单直接使用 <SOFTWARE_ROOT>/<应用ID>/deploy 和共享配置。
+	// 非标准历史候选包继续保留原来的隔离安装路径，避免破坏已有记录。
+	if old.Mode == directDeployMode || (!old.Managed && deployLayout(m)) {
+		return s.startDirectDeploy(ctx, req, name, old, m, info, files, authorized)
+	}
 	sourceRoot := filepath.Join(s.root, req.Source)
 	root := filepath.Join(sourceRoot, req.App)
 	work := filepath.Join(root, req.App, filepath.Dir(m.Runtime.File))
@@ -409,7 +414,7 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 	a := m.Actions[rec.Action]
 	env := []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME=" + os.Getenv("HOME")}
 	var cmd *exec.Cmd
-	if rec.Mode == legacyDeployMode {
+	if rec.Mode == legacyDeployMode || rec.Mode == directDeployMode {
 		// Execute only the fixed, locally approved original Deploy script.
 		// The UI never provides paths, script bodies or arbitrary args.
 		path, err := s.legacyScript(rec.App, rec.Action)
