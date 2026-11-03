@@ -52,3 +52,41 @@ func TestProtectedHandlerDeniesUntilPaired(t *testing.T) {
 		})
 	}
 }
+
+func TestConfiguredHTTPStillRequiresControllerAuthorization(t *testing.T) {
+	const agentID = "11111111-1111-4111-8111-111111111111"
+	const controller = "22222222-2222-4222-8222-222222222222"
+	const token = "example-secret-token-32-bytes-long----"
+	check := RequireController(agentID, VerifyFunc(func(c, a, s string) bool {
+		return c == controller && a == agentID && EqualToken(s, token)
+	}), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := func(allowed bool, credential string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/v1/host", nil)
+		r.Header.Set("X-EHA-Agent-ID", agentID)
+		r.Header.Set("X-EHA-Controller-ID", controller)
+		r.Header.Set("Authorization", credential)
+		if allowed {
+			return AllowConfiguredHTTP(r)
+		}
+		return r
+	}
+	for _, tc := range []struct {
+		name string
+		r    *http.Request
+		want int
+	}{
+		{"默认拒绝明文", request(false, "Bearer " + token), http.StatusBadRequest},
+		{"明文仍校验令牌", request(true, "Bearer wrong"), http.StatusUnauthorized},
+		{"授权明文允许", request(true, "Bearer " + token), http.StatusNoContent},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			check.ServeHTTP(rec, tc.r)
+			if rec.Code != tc.want {
+				t.Fatalf("HTTP 验证结果 %d，期望 %d", rec.Code, tc.want)
+			}
+		})
+	}
+}
