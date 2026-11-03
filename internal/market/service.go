@@ -77,13 +77,22 @@ func New(ctx context.Context, cfg config.Config, grants string, cache *bundles.S
 		return nil, err
 	}
 	for _, pair := range strings.FieldsFunc(grants, func(r rune) bool { return r == ',' || r == ' ' }) {
-		controller, source, ok := strings.Cut(pair, "/")
-		if !ok || !uuid.MatchString(controller) || !uuid.MatchString(source) {
-			return nil, errors.New("EASYHOSTAGENT_APP_GRANTS 格式应为 控制端UUID/来源UUID")
+		parts := strings.Split(pair, "/")
+		if len(parts) < 2 || len(parts) > 3 ||
+			!uuid.MatchString(parts[0]) || !uuid.MatchString(parts[1]) ||
+			len(parts) == 3 && !appID.MatchString(parts[2]) {
+			return nil, errors.New("EASYHOSTAGENT_APP_GRANTS 格式应为 控制端UUID/来源UUID[/应用ID]")
 		}
 		s.grants[pair] = true
 	}
 	return s, nil
+}
+
+// Legacy two-part grants authorize a whole source. Three-part grants limit
+// permissions to one app, so hosts can authorize only Sub2API and Portainer.
+func (s *Service) hasGrant(controller string, ref Ref) bool {
+	return s.grants[controller+"/"+ref.Source] ||
+		s.grants[controller+"/"+ref.Source+"/"+ref.App]
 }
 
 func (s *Service) read(id string) (Record, error) {
@@ -168,8 +177,8 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 		if r.Ref != ref {
 			r = Record{Ref: ref}
 		}
-		row := Status{Record: r, Allowed: s.grants[controller+"/"+ref.Source] && !foreign, State: "unknown"}
-		if !s.grants[controller+"/"+ref.Source] {
+		row := Status{Record: r, Allowed: s.hasGrant(controller, ref) && !foreign, State: "unknown"}
+		if !s.hasGrant(controller, ref) {
 			row.BlockedReason = "grant_required"
 		} else if foreign {
 			row.BlockedReason = "source_conflict"
@@ -204,7 +213,7 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if !req.Ref.valid() || (name != "install" && name != "update" && name != "uninstall") {
 		return Record{}, errors.New("应用或动作无效")
 	}
-	if !s.grants[controller+"/"+req.Source] || !authorized() {
+	if !s.hasGrant(controller, req.Ref) || !authorized() {
 		return Record{}, ErrDenied
 	}
 	if (name == "install" || name == "update") && !bundles.ValidDigest(req.Digest) ||
