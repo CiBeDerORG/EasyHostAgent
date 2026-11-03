@@ -194,13 +194,15 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 }
 
 func (s *Service) Start(ctx context.Context, controller, name string, req Request, authorized func() bool) (Record, error) {
-	if !req.Ref.valid() || (name != "install" && name != "uninstall") {
+	if !req.Ref.valid() || (name != "install" && name != "update" && name != "uninstall") {
 		return Record{}, errors.New("应用或动作无效")
 	}
 	if !s.grants[controller+"/"+req.Source] || !authorized() {
 		return Record{}, ErrDenied
 	}
-	if name == "install" && !bundles.ValidDigest(req.Digest) || name == "uninstall" && (req.Digest != "" || len(req.Config) != 0) {
+	if (name == "install" || name == "update") && !bundles.ValidDigest(req.Digest) ||
+		name == "update" && len(req.Config) != 0 ||
+		name == "uninstall" && (req.Digest != "" || len(req.Config) != 0) {
 		return Record{}, errors.New("动作参数无效")
 	}
 	s.mu.Lock()
@@ -218,6 +220,9 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if old.App != "" && old.Source != req.Source {
 		return Record{}, ErrConflict
 	}
+	if name == "update" && !old.Managed {
+		return Record{}, errors.New("应用尚未安装，请先安装")
+	}
 	if name == "uninstall" {
 		if !old.Managed {
 			if old.Action == name && old.Result == "succeeded" {
@@ -226,9 +231,9 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 			return Record{}, errors.New("没有本机安装记录")
 		}
 		req.Digest = old.Digest
-	} else if old.Managed {
+	} else if name == "install" && old.Managed {
 		if old.Digest != req.Digest {
-			return Record{}, errors.New("已管理的应用使用不同版本，请先卸载")
+			return Record{}, errors.New("应用已安装；请使用更新操作")
 		}
 	}
 	info, files, err := s.cache.ReadCandidate(req.Digest)
@@ -239,7 +244,10 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if err != nil {
 		return Record{}, err
 	}
-	if name == "install" {
+	if name == "update" && m.Actions["update"].Strategy != "script" {
+		return Record{}, errors.New("应用未声明受支持的更新脚本")
+	}
+	if name == "install" || name == "update" {
 		if !slices.Contains(m.Compatibility.Platforms, s.platform) || !slices.Contains(m.Compatibility.Architectures, runtime.GOARCH) {
 			return Record{}, errors.New("应用未声明支持本机系统或架构")
 		}
@@ -281,6 +289,8 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if err = materialize(root, info, files); err != nil {
 		return Record{}, errors.New("无法写入已校验的包文件")
 	}
+	// Update reuses the existing env/secrets and never overwrites user settings.
+	// The update.sh from the validated Deploy application bundle is authoritative.
 	values, err := prepareConfig(root, m.Config, req.Config, name == "install")
 	if err != nil {
 		return Record{}, err
