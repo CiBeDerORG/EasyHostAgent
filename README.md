@@ -4,6 +4,14 @@ EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机
 
 支持 HTTP/HTTPS 身份配对、Docker/Compose 资源发现和按摘要缓存应用包。主机管理员授权指定应用源后，控制端可安装、卸载并批量查询 Docker 应用。详见本文「Docker 应用商店」。下文 T01/T02 和 M3 章节保留各阶段的开发记录。
 
+## 推荐部署：GitHub Actions → GHCR → deploy
+
+EasyHostAgent 的默认集成部署方式现为 **Docker Compose 单容器**，GitHub Actions 自动构建并发布 AMD64/ARM64 镜像 `ghcr.io/cibederorg/easyhostagent:feat-docker-app-store`。安装端不编译 Go、不下载二进制 Release。完整配置、安装、更新与卸载命令见 [deploy 的 EasyHostAgent 指南](https://github.com/CiBeDerORG/deploy/blob/feat/docker-app-store/easyhostagent/README.md)。
+
+该镜像基于官方 Docker CLI 运行时（包含 `docker compose`），需要挂载宿主机 `/var/run/docker.sock` 和相同绝对路径的软件根目录，因此具有**宿主机 Docker 管理权限**。容器以 root 运行；建议仅在可信网络使用，默认 HTTPS、可配置 HTTP，不发送心跳。容器内根据 `EASYHOSTAGENT_PLATFORM=fnos|linux` 保持目标主机的平台标识，避免将 fnOS 误识别成镜像自身的 Alpine Linux。
+
+下方原生 systemd 安装器保留用于独立使用；`deploy.sh easyhostagent` 已不再走原生安装器。开发版二进制 Release 的自动发布流程已经停用，推荐使用 GHCR 镜像。
+
 ## 工程结构
 
 ```text
