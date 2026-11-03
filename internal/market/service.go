@@ -196,10 +196,18 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 				row.External = !r.Managed || r.Mode == "legacy_deploy" && !legacyMatch
 				if row.External {
 					row.Allowed = false
-					if !r.Managed && legacyMatch && s.hasGrant(controller, ref) && !foreign {
-						row.Adoptable = true
-						row.BlockedReason = "adoption_required"
-					} else if r.Mode == "legacy_deploy" && !legacyMatch {
+					if !s.hasGrant(controller, ref) {
+						row.BlockedReason = "grant_required"
+					} else if foreign {
+						row.BlockedReason = "source_conflict"
+					} else if !r.Managed && legacyMatch {
+						if _, err := s.legacyScript(ref.App, "update"); err != nil {
+							row.BlockedReason = "legacy_scripts_missing"
+						} else {
+							row.Adoptable = true
+							row.BlockedReason = "adoption_required"
+						}
+					} else if r.Mode == legacyDeployMode && !legacyMatch {
 						row.BlockedReason = "legacy_identity_mismatch"
 					} else {
 						row.BlockedReason = "external_project"
@@ -285,6 +293,9 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 		}
 	}
 	if old.Mode == legacyDeployMode {
+		if name == "install" && len(req.Config) != 0 {
+			return Record{}, errors.New("原有 Deploy 安装使用现有配置，不允许通过商店覆盖参数")
+		}
 		// Original Deploy installation keeps its own paths, data and secrets.
 		// Do not materialize a separate Agent package over an existing app.
 		if name == "install" && old.Managed {
