@@ -40,7 +40,7 @@ func registerMarket(mux *http.ServeMux, agentID string, store *pairing.Store, ap
 			sendJSON(w, map[string]any{"apps": rows})
 			return
 		}
-		if name != "install" && name != "uninstall" {
+		if name != "install" && name != "update" && name != "uninstall" {
 			http.NotFound(w, r)
 			return
 		}
