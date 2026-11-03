@@ -1,4 +1,4 @@
-// Package app owns the native HTTPS server lifecycle without heartbeat,
+// Package app owns the native HTTP/HTTPS server lifecycle without heartbeat,
 // Docker polling or external task execution.
 package app
 
@@ -61,14 +61,14 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	defer func() { stopJobs(); apps.Wait() }()
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
-		return fmt.Errorf("HTTPS listen %q: %w", cfg.ListenAddr, err)
+		return fmt.Errorf("%s listen %q: %w", cfg.Transport, cfg.ListenAddr, err)
 	}
 	tlsConfig := &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithMarket(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, apps, store),
+		Handler:           httpapi.NewHandlerWithMarketTransport(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, apps, cfg.Transport == "http", store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -76,9 +76,15 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		MaxHeaderBytes:    16 << 10,
 	}
 	errCh := make(chan error, 1)
-	go func() { errCh <- srv.Serve(tls.NewListener(ln, tlsConfig)) }()
+	go func() {
+		if cfg.Transport == "http" {
+			errCh <- srv.Serve(ln)
+		} else {
+			errCh <- srv.Serve(tls.NewListener(ln, tlsConfig))
+		}
+	}()
 	logger.Info("agent_start", "agent_id", state.AgentID, "listen", ln.Addr().String(),
-		"tls_spki_sha256", state.SPKISHA256, "platform", cfg.Platform)
+		"tls_spki_sha256", state.SPKISHA256, "platform", cfg.Platform, "transport", cfg.Transport)
 	select {
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
