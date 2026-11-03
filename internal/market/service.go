@@ -284,6 +284,51 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 			return Record{}, errors.New("此应用要求 Agent 以 root 身份运行")
 		}
 	}
+	if old.Mode == legacyDeployMode {
+		// Original Deploy installation keeps its own paths, data and secrets.
+		// Do not materialize a separate Agent package over an existing app.
+		if name == "install" && old.Managed {
+			return Record{}, errors.New("原有 Deploy 应用已安装，请使用更新")
+		}
+		if m.Actions[name].Strategy != "script" ||
+			m.Actions[name].Path != "deploy/"+name+".sh" || len(m.Actions[name].Argv) != 0 {
+			return Record{}, errors.New("当前应用清单不支持原有 Deploy 部署动作")
+		}
+		if _, err := s.legacyScript(req.App, name); err != nil {
+			return Record{}, err
+		}
+		snap, err := s.scan(ctx)
+		if err != nil || !snap.Complete {
+			return Record{}, errors.New("无法完整验证原有 Deploy 应用的容器归属")
+		}
+		found := false
+		for _, p := range snap.Resources {
+			if p.ComposeProject != req.App {
+				continue
+			}
+			if found || !s.validLegacyProject(p, req.App) {
+				return Record{}, ErrConflict
+			}
+			found = true
+		}
+		if name == "install" && found || name != "install" && !found {
+			return Record{}, errors.New("原有 Deploy 项目状态与操作不匹配，请刷新状态")
+		}
+		if !authorized() {
+			return Record{}, ErrDenied
+		}
+		rec := Record{Ref: req.Ref, Digest: req.Digest, Action: name,
+			Result: "running", Managed: true, Mode: legacyDeployMode,
+			Services: m.Verification.Services}
+		if err := s.save(rec); err != nil {
+			return Record{}, errors.New("无法保存原有 Deploy 应用操作记录")
+		}
+		s.active = req.App
+		s.jobs.Add(1)
+		go s.run(rec, m, filepath.Join(filepath.Dir(s.root), req.App),
+			s.legacyWorkdir(req.App), nil, authorized)
+		return rec, nil
+	}
 	sourceRoot := filepath.Join(s.root, req.Source)
 	root := filepath.Join(sourceRoot, req.App)
 	work := filepath.Join(root, req.App, filepath.Dir(m.Runtime.File))
@@ -344,7 +389,16 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 	a := m.Actions[rec.Action]
 	env := []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME=" + os.Getenv("HOME")}
 	var cmd *exec.Cmd
-	if a.Strategy == "compose_down" {
+	if rec.Mode == legacyDeployMode {
+		// Execute only the fixed, locally approved original Deploy script.
+		// The UI never provides paths, script bodies or arbitrary args.
+		path, err := s.legacyScript(rec.App, rec.Action)
+		if err != nil {
+			s.finishLegacyFailure(rec, err)
+			return
+		}
+		cmd = exec.CommandContext(ctx, "/bin/bash", path)
+	} else if a.Strategy == "compose_down" {
 		// 兼容旧 v1 清单；默认 down 保留数据卷，固定项目、目录与 Compose 文件。
 		cmd = exec.CommandContext(ctx, "docker", "compose", "-p", rec.App, "-f", filepath.Join(root, rec.App, m.Runtime.File), "down")
 		for k, v := range values {
@@ -389,4 +443,13 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 		// 保留磁盘上的中断标识，下次查询显示未知，避免谎报成功。
 		return
 	}
+}
+
+func (s *Service) finishLegacyFailure(rec Record, _ error) {
+	rec.Result = "failed"
+	rec.Message = "原有 Deploy 脚本不可用或权限不安全"
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.active = ""
+	_ = s.save(rec)
 }
