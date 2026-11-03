@@ -109,9 +109,9 @@ func (s *Service) restoreLegacyScripts(app string, info bundles.CandidateInfo, f
 	}
 	required := map[string]bool{
 		"docker-compose.yaml": false,
-		"install.sh": false,
-		"update.sh": false,
-		"uninstall.sh": false,
+		"install.sh":          false,
+		"update.sh":           false,
+		"uninstall.sh":        false,
 	}
 	prefix := app + "/deploy/"
 	for _, item := range info.Files {

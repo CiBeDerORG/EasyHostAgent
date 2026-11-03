@@ -169,4 +169,3 @@ func (s *Service) startDirectDeploy(ctx context.Context, req Request, name strin
 	go s.run(rec, m, softwareRoot, s.legacyWorkdir(req.App), values, authorized)
 	return rec, nil
 }
-
