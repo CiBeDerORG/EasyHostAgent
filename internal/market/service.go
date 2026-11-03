@@ -37,7 +37,7 @@ type Request struct {
 
 type Record struct {
 	Ref
-	Mode     string `json:"mode,omitempty"`
+	Mode     string   `json:"mode,omitempty"`
 	Digest   string   `json:"bundle_sha256,omitempty"`
 	Action   string   `json:"action,omitempty"`
 	Result   string   `json:"result,omitempty"`
