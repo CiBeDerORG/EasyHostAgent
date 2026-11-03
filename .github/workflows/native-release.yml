@@ -1,0 +1,67 @@
+name: EasyHostAgent 原生程序发布
+
+on:
+  push:
+    branches:
+      - feat/docker-app-store
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/native-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: easyhostagent-native-development-release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: 发布 Linux AMD64/ARM64 二进制
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: 检查格式与单元测试
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+          go test ./...
+      - name: 构建 Linux 双架构安装文件和 SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Version=0.1.0-dev -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Commit=$GITHUB_SHA" \
+              -o "dist/easyhostagent-linux-$arch" ./cmd/easyhostagent
+            (
+              cd dist
+              sha256sum "easyhostagent-linux-$arch" > "easyhostagent-linux-$arch.sha256"
+            )
+          done
+      - name: 更新原生开发版 GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="v0.1.0-appstore.dev"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "EasyHostAgent 原生开发版" \
+              --notes "Linux AMD64/ARM64 原生 systemd 安装包，附 SHA-256 校验文件；此开发版标签及资产可更新。" \
+              --prerelease
+          fi
+          gh release upload "$tag" dist/easyhostagent-linux-amd64 dist/easyhostagent-linux-amd64.sha256 \
+            dist/easyhostagent-linux-arm64 dist/easyhostagent-linux-arm64.sha256 --clobber
