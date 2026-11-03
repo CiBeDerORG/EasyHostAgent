@@ -194,6 +194,11 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(work, "update.sh"), []byte("printf updated > ../updated\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
+	// Simulate a legacy Deploy installation whose Compose file was removed.
+	// Docker labels still identify the original Compose project and path.
+	if err := os.Remove(filepath.Join(work, "docker-compose.yaml")); err != nil {
+		t.Fatal(err)
+	}
 	dataFile := filepath.Join(root, "sub2api", "data", "postgres", "sentinel")
 	if err := os.MkdirAll(filepath.Dir(dataFile), 0700); err != nil {
 		t.Fatal(err)
@@ -273,6 +278,10 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 	if st, err := os.Stat(filepath.Join(work, "uninstall.sh")); err != nil || st.Mode().Perm() != 0755 {
 		t.Fatal("没有从可信包修复缺失的卸载脚本")
 	}
+	compose, err := os.ReadFile(filepath.Join(work, "docker-compose.yaml"))
+	if err != nil || string(compose) != "services: {api: {image: example}}\\n" {
+		t.Fatalf("没有从固定 Git 应用包恢复缺失的 Compose 文件: %q %v", compose, err)
+	}
 	for path, expected := range map[string]string{dataFile: "do-not-change", secrets: "SENSITIVE=unchanged\n"} {
 		actual, err := os.ReadFile(path)
 		if err != nil || string(actual) != expected {
@@ -285,6 +294,56 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 	// One-time force update cannot re-adopt an already managed record.
 	if _, err := agent.ForceUpdate(ctx, testController, request, func() bool { return true }); !errors.Is(err, ErrConflict) {
 		t.Fatalf("已受管应用不可重复强制接管: %v", err)
+	}
+}
+
+func TestForceUpdateRepairsUnsafeComposeAndBacksItUp(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	root := filepath.Join(base, "software")
+	work := filepath.Join(root, "sub2api", "deploy")
+	if err := os.MkdirAll(work, 0755); err != nil {
+		t.Fatal(err)
+	}
+	composePath := filepath.Join(work, "docker-compose.yaml")
+	if err := os.WriteFile(composePath, []byte("services: {}\\n"), 0666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(composePath, 0666); err != nil {
+		t.Fatal(err)
+	}
+	data := filepath.Join(base, "agent-data")
+	if err := os.MkdirAll(data, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := bundles.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := legacyBundle(t, cache, "sub2api")
+	info, files, err := cache.ReadCandidate(digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{SoftwareRoot: root, DataDir: data, Platform: "linux"}
+	agent, err := New(ctx, cfg, testController+"/"+testSource+"/sub2api", cache, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := agent.restoreLegacyScripts("sub2api", info, files); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(composePath)
+	if err != nil || string(actual) != "services: {api: {image: example}}\\n" {
+		t.Fatalf("不安全 Compose 文件没有被可信版本替换: %q %v", actual, err)
+	}
+	st, err := os.Stat(composePath)
+	if err != nil || st.Mode().Perm() != 0644 {
+		t.Fatalf("恢复后的 Compose 文件权限不正确: %v %v", st, err)
+	}
+	backups, err := filepath.Glob(filepath.Join(data, "app-records", "sub2api-force-update-docker-compose.yaml-*.bak"))
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("原 Compose 文件没有备份: %v %v", backups, err)
 	}
 }
 
