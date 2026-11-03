@@ -52,7 +52,7 @@ func TestFromSourcesRejectsUnsafeSettings(t *testing.T) {
 	tests := []map[string]string{
 		{EnvDataDir: "relative"}, {EnvDataDir: "/"}, {EnvSoftwareRoot: "relative"}, {EnvSoftwareRoot: "/"},
 		{EnvDataDir: "/opt/software", EnvSoftwareRoot: "/opt/software"}, {EnvLogLevel: "verbose"},
-		{EnvListen: ":0"}, {EnvListen: "127.0.0.1:xyz"}, {EnvListen: "127.0.0.1:65536"}, {EnvListen: "0.0.0.0:7014/path"}, {EnvTransport: "tcp"}, {EnvTransport: "HTTP"},
+		{EnvListen: ":0"}, {EnvListen: "127.0.0.1:xyz"}, {EnvListen: "127.0.0.1:65536"}, {EnvListen: "0.0.0.0:7014/path"}, {EnvTransport: "tcp"}, {EnvTransport: "HTTP"}, {EnvPlatform: "win"},
 	}
 	for _, values := range tests {
 		if _, err := FromSources(env(values), "", false); err == nil {
@@ -77,5 +77,24 @@ func TestConfiguredPlainHTTP(t *testing.T) {
 	}
 	if cfg.Transport != "http" || cfg.ListenAddr != "0.0.0.0:7014" {
 		t.Fatalf("HTTP 配置没有保留: %+v", cfg)
+	}
+}
+
+func TestContainerPlatformExplicitOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, platform, osInfo, want string
+	}{
+		{"fnos_host_in_alpine_container", "fnos", "ID=alpine", "fnos"},
+		{"linux_host_in_fnos_container", "linux", "ID=fnos", "linux"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := FromSources(env(map[string]string{EnvPlatform: tc.platform}), tc.osInfo, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Platform != tc.want {
+				t.Fatalf("container host platform=%s, want=%s", cfg.Platform, tc.want)
+			}
+		})
 	}
 }
