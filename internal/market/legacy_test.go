@@ -118,8 +118,8 @@ func TestLegacyDeployAdoptionRequiresGrantAndExactComposeIdentity(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if agent.hasGrant(testController, Ref{Source: testSource, App: "portainer"}) {
-		t.Fatal("sub2api 授权不应自动允许 Portainer")
+	if !agent.hasGrant(testController, Ref{Source: testSource, App: "portainer"}) {
+		t.Fatal("已配对控制端无需逐应用授权")
 	}
 	rows, err := agent.Status(ctx, testController, []Ref{ref}, false)
 	if err != nil || len(rows) != 1 || !rows[0].Adoptable || !rows[0].External ||
@@ -352,37 +352,24 @@ func TestForceUpdateRepairsUnsafeComposeAndBacksItUp(t *testing.T) {
 	}
 }
 
-func TestLegacyGrantParsingAndBackwardCompatibility(t *testing.T) {
+func TestLegacyGrantConfigDoesNotRestrictPairedController(t *testing.T) {
 	base := t.TempDir()
 	cfg := config.Config{DataDir: filepath.Join(base, "data"), SoftwareRoot: filepath.Join(base, "software"), Platform: "linux"}
 	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	for _, grant := range []string{
-		"nonsense", testController + "/" + testSource + "/",
-		testController + "/" + testSource + "/sub2api/extra",
-	} {
-		if _, err := New(context.Background(), cfg, grant, nil, nil); err == nil {
-			t.Fatalf("授权格式应拒绝: %s", grant)
-		}
-	}
-	apps := []Ref{{testSource, "sub2api"}, {testSource, "portainer"}, {testSource, "qoder2api-hub"}}
-	for _, tc := range []struct {
-		grant string
-		want  [3]bool
-	}{
-		{testController + "/" + testSource, [3]bool{true, true, true}},
-		{testController + "/" + testSource + "/sub2api," +
-			testController + "/" + testSource + "/portainer", [3]bool{true, true, false}},
-	} {
-		s, err := New(context.Background(), cfg, tc.grant, nil, nil)
+	for _, oldValue := range []string{"", "nonsense", testController + "/" + testSource + "/sub2api"} {
+		s, err := New(context.Background(), cfg, oldValue, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for i, app := range apps {
-			if s.hasGrant(testController, app) != tc.want[i] {
-				t.Fatalf("应用授权范围错误: %+v, %s", app, tc.grant)
+		for _, app := range []string{"sub2api", "portainer", "brand-new-app"} {
+			if !s.hasGrant(testController, Ref{Source: testSource, App: app}) {
+				t.Fatalf("有效控制端不应按应用授权: %s", app)
 			}
+		}
+		if s.hasGrant("unknown", Ref{Source: testSource, App: "sub2api"}) {
+			t.Fatal("无效控制端标识不能获得应用权限")
 		}
 	}
 }

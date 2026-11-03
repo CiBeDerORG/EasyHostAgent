@@ -11,7 +11,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 )
 
-func TestStatusExplainsGrantAndExternalOwnership(t *testing.T) {
+func TestStatusUsesPairingAndChecksExternalOwnership(t *testing.T) {
 	ctx := context.Background()
 	data := filepath.Join(t.TempDir(), "data")
 	software := filepath.Join(t.TempDir(), "software")
@@ -38,8 +38,8 @@ func TestStatusExplainsGrantAndExternalOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := noGrant.Status(ctx, testController, []Ref{known}, false)
-	if err != nil || len(rows) != 1 || rows[0].Allowed || rows[0].BlockedReason != "grant_required" {
-		t.Fatalf("应明确提示需要应用源授权: %+v %v", rows, err)
+	if err != nil || len(rows) != 1 || !rows[0].Allowed || rows[0].BlockedReason != "" {
+		t.Fatalf("已配对控制端无需额外授权应用: %+v %v", rows, err)
 	}
 	allowed, err := New(ctx, cfg, testController+"/"+testSource, cache, scan)
 	if err != nil {

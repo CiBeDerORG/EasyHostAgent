@@ -13,10 +13,9 @@ import (
 
 const legacyDeployMode = "legacy_deploy"
 
-// Legacy adoption is deliberately limited to existing Deploy-managed app
-// directories. It never allows a remote caller to supply a shell path.
+// 只允许合法应用 ID；真正的可管理性由固定 Git 安装包、Compose 路径和本机脚本共同验证。
 func legacyDeployApp(id string) bool {
-	return id == "sub2api" || id == "portainer" || id == "mihomo" || id == "opencode"
+	return len(id) <= 64 && appID.MatchString(id)
 }
 
 func (s *Service) legacyWorkdir(app string) string {
@@ -84,8 +83,7 @@ func (s *Service) legacyScript(app, action string) (string, error) {
 	return filepath.Join(work, action+".sh"), nil
 }
 
-// Adopt is a separate, explicit trust step. It does not re-install, move
-// data, modify Compose resources or execute any script.
+// 关联操作仅建立本机记录：必须先验证固定 Git 包及 Docker Compose 的原始身份，不执行任何脚本。
 func (s *Service) Adopt(ctx context.Context, controller string, req Request, authorized func() bool) (Record, error) {
 	if !req.Ref.valid() || !legacyDeployApp(req.App) ||
 		!bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {

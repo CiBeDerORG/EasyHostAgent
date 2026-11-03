@@ -57,7 +57,7 @@ type Status struct {
 	ForceUpdatable bool   `json:"force_updatable,omitempty"`
 }
 
-var ErrDenied = errors.New("该控制端尚未获本机授权执行此来源的应用")
+var ErrDenied = errors.New("控制端配对授权无效")
 var ErrBusy = errors.New("主机正在执行应用操作，请稍后刷新")
 var ErrConflict = errors.New("应用不属于本来源或主机上已存在同名项目")
 
@@ -68,7 +68,6 @@ type Service struct {
 	root, records string
 	platform      string
 	cache         *bundles.Store
-	grants        map[string]bool
 	scan          inventory
 	mu            sync.Mutex
 	active        string
@@ -76,27 +75,18 @@ type Service struct {
 }
 
 func New(ctx context.Context, cfg config.Config, grants string, cache *bundles.Store, scan inventory) (*Service, error) {
-	s := &Service{ctx: ctx, records: filepath.Join(cfg.DataDir, "app-records"), root: filepath.Join(cfg.SoftwareRoot, ".easyhostagent-apps"), platform: cfg.Platform, cache: cache, scan: scan, grants: map[string]bool{}}
+	s := &Service{ctx: ctx, records: filepath.Join(cfg.DataDir, "app-records"), root: filepath.Join(cfg.SoftwareRoot, ".easyhostagent-apps"), platform: cfg.Platform, cache: cache, scan: scan}
 	if err := privateDir(s.records); err != nil {
 		return nil, err
 	}
-	for _, pair := range strings.FieldsFunc(grants, func(r rune) bool { return r == ',' || r == ' ' }) {
-		parts := strings.Split(pair, "/")
-		if len(parts) < 2 || len(parts) > 3 ||
-			!uuid.MatchString(parts[0]) || !uuid.MatchString(parts[1]) ||
-			len(parts) == 3 && !appID.MatchString(parts[2]) {
-			return nil, errors.New("EASYHOSTAGENT_APP_GRANTS 格式应为 控制端UUID/来源UUID[/应用ID]")
-		}
-		s.grants[pair] = true
-	}
+	// 旧版应用级授权参数仅用于兼容已有配置；管理权限由 HTTP 配对身份校验控制。
+	_ = grants
 	return s, nil
 }
 
-// Legacy two-part grants authorize a whole source. Three-part grants limit
-// permissions to one app, so hosts can authorize only Sub2API and Portainer.
+// 应用无需逐一授权，但控制端必须具备有效 UUID；动作执行时还会核对配对令牌。
 func (s *Service) hasGrant(controller string, ref Ref) bool {
-	return s.grants[controller+"/"+ref.Source] ||
-		s.grants[controller+"/"+ref.Source+"/"+ref.App]
+	return uuid.MatchString(controller) && ref.valid()
 }
 
 func (s *Service) read(id string) (Record, error) {
