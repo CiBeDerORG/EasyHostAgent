@@ -49,12 +49,12 @@ type Record struct {
 
 type Status struct {
 	Record
-	State         string `json:"state"`
-	Allowed       bool   `json:"allowed"`
-	External      bool   `json:"external,omitempty"`
-	BlockedReason string `json:"blocked_reason,omitempty"`
-	Adoptable     bool   `json:"adoptable,omitempty"`
-	ForceUpdatable bool `json:"force_updatable,omitempty"`
+	State          string `json:"state"`
+	Allowed        bool   `json:"allowed"`
+	External       bool   `json:"external,omitempty"`
+	BlockedReason  string `json:"blocked_reason,omitempty"`
+	Adoptable      bool   `json:"adoptable,omitempty"`
+	ForceUpdatable bool   `json:"force_updatable,omitempty"`
 }
 
 var ErrDenied = errors.New("该控制端尚未获本机授权执行此来源的应用")
