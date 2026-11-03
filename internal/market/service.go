@@ -228,6 +228,11 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 				row.State = "missing"
 			}
 		}
+		// 已受管且身份有效的运行实例可重复执行固定来源的受控更新脚本。
+		if r.Managed && !row.External && row.Allowed &&
+			slices.Contains([]string{"running", "stopped", "partial"}, row.State) {
+			row.ForceUpdatable = true
+		}
 		result = append(result, row)
 	}
 	return result, nil
