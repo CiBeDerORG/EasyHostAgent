@@ -47,9 +47,10 @@ type Record struct {
 
 type Status struct {
 	Record
-	State    string `json:"state"`
-	Allowed  bool   `json:"allowed"`
-	External bool   `json:"external,omitempty"`
+	State         string `json:"state"`
+	Allowed       bool   `json:"allowed"`
+	External      bool   `json:"external,omitempty"`
+	BlockedReason string `json:"blocked_reason,omitempty"`
 }
 
 var ErrDenied = errors.New("该控制端尚未获本机授权执行此来源的应用")
@@ -168,6 +169,11 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 			r = Record{Ref: ref}
 		}
 		row := Status{Record: r, Allowed: s.grants[controller+"/"+ref.Source] && !foreign, State: "unknown"}
+		if !s.grants[controller+"/"+ref.Source] {
+			row.BlockedReason = "grant_required"
+		} else if foreign {
+			row.BlockedReason = "source_conflict"
+		}
 		if scanErr == nil && snap.Complete {
 			row.State = "not_installed"
 			if p, ok := projects[ref.App]; ok {
@@ -175,6 +181,7 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 				row.External = !r.Managed
 				if row.External {
 					row.Allowed = false
+					row.BlockedReason = "external_project"
 				}
 				if r.Managed && row.State == "running" {
 					for _, required := range r.Services {
