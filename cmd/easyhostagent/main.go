@@ -1,4 +1,4 @@
-// EasyHostAgent - a native HTTPS host management agent for EasyTier.
+// EasyHostAgent - a native HTTP/HTTPS host management agent for EasyNetTopo.
 //
 // T01-04 adds local-only pairing codes and a durable controller grant.
 package main
@@ -124,8 +124,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "host configuration error:", err)
 			return 1
 		}
-		fmt.Fprintf(stdout, "configuration valid: data_dir=%s software_root=%s listen=%s log_level=%s\n",
-			cfg.DataDir, cfg.SoftwareRoot, cfg.ListenAddr, cfg.LogLevel)
+		fmt.Fprintf(stdout, "configuration valid: data_dir=%s software_root=%s listen=%s transport=%s log_level=%s\n",
+			cfg.DataDir, cfg.SoftwareRoot, cfg.ListenAddr, cfg.Transport, cfg.LogLevel)
 		return 0
 	}
 	if *showIdentity && *pairingCode {
