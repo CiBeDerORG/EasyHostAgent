@@ -224,6 +224,17 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 						}
 					}
 				}
+			} else if ref.App == "opencode" && !r.Managed {
+				// 历史 OpenCode 未指定 Compose name，只有核对唯一实例完整标签后才能只读关联。
+				for _, candidate := range snap.Resources {
+					if s.legacyOpenCodeProject(candidate) {
+						row.State = candidate.Status
+						row.External = true
+						row.Allowed = false
+						row.BlockedReason = "legacy_project_name"
+						break
+					}
+				}
 			} else if r.Managed {
 				row.State = "missing"
 			}
