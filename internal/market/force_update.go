@@ -7,36 +7,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
-	"regexp"
 	"syscall"
 	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 )
 
-var safeLegacyFileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*package market
-
-import (
-	"context"
-	"errors"
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"runtime"
-	"slices"
-	"strings"
-	"regexp"
-	"syscall"
-	"time"
-
-	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
-)
-
-)
+var safeLegacyFileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
 // backupLegacyTarget saves the exact existing regular file contents, or the
 // literal target of a symlink, without ever following a symlink.
