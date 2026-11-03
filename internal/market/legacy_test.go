@@ -237,7 +237,11 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 		t.Fatalf("旧 Deploy 缺卸载脚本时应可申请强制更新: %+v %v", rows, err)
 	}
 	request := Request{Ref: ref, Digest: digest, ConfirmExternal: true}
-	for _, bad := range []struct{ controller string; confirm bool; authorized bool }{
+	for _, bad := range []struct {
+		controller string
+		confirm    bool
+		authorized bool
+	}{
 		{testController, false, true},
 		{"wrong-controller", true, true},
 		{testController, true, false},
