@@ -37,6 +37,7 @@ type Request struct {
 
 type Record struct {
 	Ref
+	Mode     string `json:"mode,omitempty"`
 	Digest   string   `json:"bundle_sha256,omitempty"`
 	Action   string   `json:"action,omitempty"`
 	Result   string   `json:"result,omitempty"`
@@ -51,6 +52,7 @@ type Status struct {
 	Allowed       bool   `json:"allowed"`
 	External      bool   `json:"external,omitempty"`
 	BlockedReason string `json:"blocked_reason,omitempty"`
+	Adoptable     bool   `json:"adoptable,omitempty"`
 }
 
 var ErrDenied = errors.New("该控制端尚未获本机授权执行此来源的应用")
@@ -187,10 +189,21 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 			row.State = "not_installed"
 			if p, ok := projects[ref.App]; ok {
 				row.State = p.Status
-				row.External = !r.Managed
+				legacyMatch := s.validLegacyProject(p, ref.App)
+				// Existing Agent-managed apps use private workspace labels.
+				// An explicitly adopted legacy Deploy app must still match
+				// its original, fixed Compose directory on every scan.
+				row.External = !r.Managed || r.Mode == "legacy_deploy" && !legacyMatch
 				if row.External {
 					row.Allowed = false
-					row.BlockedReason = "external_project"
+					if !r.Managed && legacyMatch && s.hasGrant(controller, ref) && !foreign {
+						row.Adoptable = true
+						row.BlockedReason = "adoption_required"
+					} else if r.Mode == "legacy_deploy" && !legacyMatch {
+						row.BlockedReason = "legacy_identity_mismatch"
+					} else {
+						row.BlockedReason = "external_project"
+					}
 				}
 				if r.Managed && row.State == "running" {
 					for _, required := range r.Services {
