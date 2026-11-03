@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -113,6 +114,19 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 			}
 			result, e := store.Exchange(request.ControllerID, request.DeviceID, request.Code)
 			if e != nil {
+				// 不输出一次性配对码、控制端 Token、请求正文或配对状态文件内容。
+				reason := "pairing_unavailable"
+				switch {
+				case errors.Is(e, pairing.ErrRateLimited):
+					reason = "pairing_attempts_exhausted"
+				case errors.Is(e, pairing.ErrInvalidCode):
+					reason = "invalid_pairing_code"
+				case errors.Is(e, pairing.ErrInvalidIDs):
+					reason = "invalid_identity"
+				case errors.Is(e, pairing.ErrNoCode), errors.Is(e, pairing.ErrExpired):
+					reason = "pairing_window_closed"
+				}
+				slog.Warn("Agent 配对请求拒绝", "stage", "exchange", "code", reason)
 				switch {
 				case errors.Is(e, pairing.ErrRateLimited):
 					sendError(w, http.StatusTooManyRequests, "pairing_attempts_exhausted", "Generate a new code on the host")
@@ -128,6 +142,7 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 				}
 				return
 			}
+			slog.Info("Agent 配对授权已保存", "stage", "accepted")
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(result)
