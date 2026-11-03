@@ -40,6 +40,11 @@ func NewHandlerWithBundles(state identity.State, platform, version string, servi
 }
 
 func NewHandlerWithMarket(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithMarketTransport(state, platform, version, service, engine, cache, apps, false, stores...)
+}
+
+// NewHandlerWithMarketTransport 在显式配置 HTTP 时允许明文传输；默认继续强制 HTTPS。
+func NewHandlerWithMarketTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -155,8 +160,11 @@ func NewHandlerWithMarket(state identity.State, platform, version string, servic
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if r.TLS == nil {
-			sendError(w, http.StatusBadRequest, "tls_required", "HTTPS is required")
-			return
+			if !allowHTTP {
+				sendError(w, http.StatusBadRequest, "tls_required", "HTTPS is required")
+				return
+			}
+			r = auth.AllowConfiguredHTTP(r)
 		}
 		mux.ServeHTTP(w, r)
 	})
