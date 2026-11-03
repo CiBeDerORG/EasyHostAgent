@@ -201,7 +201,21 @@ func materialize(root string, info bundles.CandidateInfo, files map[string][]byt
 		if f.Mode == "0755" {
 			mode = 0755
 		}
-		if err := writeFile(filepath.Join(root, f.Destination), files[f.Destination], mode); err != nil {
+		target := filepath.Join(root, f.Destination)
+		if strings.HasPrefix(f.Destination, info.ApplicationID+"/config/") {
+			// 已存在的用户配置不随安装包更新覆盖，也不能通过符号链接绕过隔离目录。
+			st, err := os.Lstat(target)
+			if err == nil {
+				if !st.Mode().IsRegular() || st.Mode().Perm()&0022 != 0 {
+					return errors.New("已有用户配置文件不安全，拒绝覆盖")
+				}
+				continue
+			}
+			if !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		}
+		if err := writeFile(target, files[f.Destination], mode); err != nil {
 			return err
 		}
 	}
