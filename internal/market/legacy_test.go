@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
@@ -205,5 +204,4 @@ func TestLegacyGrantParsingAndBackwardCompatibility(t *testing.T) {
 			}
 		}
 	}
-	_ = time.Second // test deliberately uses no background waiting
 }
