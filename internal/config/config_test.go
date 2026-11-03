@@ -28,7 +28,7 @@ func TestFromSourcesDefaults(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.SoftwareRoot != tt.want || cfg.DataDir != DefaultDataDir || cfg.LogLevel != slog.LevelInfo || cfg.ListenAddr != DefaultListen {
+			if cfg.SoftwareRoot != tt.want || cfg.DataDir != DefaultDataDir || cfg.LogLevel != slog.LevelInfo || cfg.ListenAddr != DefaultListen || cfg.Transport != "https" {
 				t.Fatalf("cfg=%+v, want root=%s", cfg, tt.want)
 			}
 		})
@@ -52,7 +52,7 @@ func TestFromSourcesRejectsUnsafeSettings(t *testing.T) {
 	tests := []map[string]string{
 		{EnvDataDir: "relative"}, {EnvDataDir: "/"}, {EnvSoftwareRoot: "relative"}, {EnvSoftwareRoot: "/"},
 		{EnvDataDir: "/opt/software", EnvSoftwareRoot: "/opt/software"}, {EnvLogLevel: "verbose"},
-		{EnvListen: ":0"}, {EnvListen: "127.0.0.1:xyz"}, {EnvListen: "127.0.0.1:65536"}, {EnvListen: "0.0.0.0:7014/path"},
+		{EnvListen: ":0"}, {EnvListen: "127.0.0.1:xyz"}, {EnvListen: "127.0.0.1:65536"}, {EnvListen: "0.0.0.0:7014/path"}, {EnvTransport: "tcp"}, {EnvTransport: "HTTP"},
 	}
 	for _, values := range tests {
 		if _, err := FromSources(env(values), "", false); err == nil {
@@ -64,5 +64,18 @@ func TestMissingEnvGetter(t *testing.T) {
 	_, err := FromSources(nil, "", false)
 	if err == nil || !strings.Contains(err.Error(), "environment") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfiguredPlainHTTP(t *testing.T) {
+	cfg, err := FromSources(env(map[string]string{
+		EnvTransport: "http",
+		EnvListen:    "0.0.0.0:7014",
+	}), "ID=ubuntu", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Transport != "http" || cfg.ListenAddr != "0.0.0.0:7014" {
+		t.Fatalf("HTTP 配置没有保留: %+v", cfg)
 	}
 }
