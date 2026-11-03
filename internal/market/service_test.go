@@ -29,6 +29,7 @@ runtime: {kind: docker_compose, compose_project: %s, compose_file: deploy/compos
 compatibility: {platforms: [linux, fnos], architectures: [amd64, arm64]}
 actions:
   install: {strategy: script, path: deploy/service.sh, argv: [install]}
+  update: {strategy: script, path: deploy/service.sh, argv: [update]}
   uninstall: {strategy: script, path: deploy/service.sh, argv: [uninstall]}
 config:
   - {key: WEB_PORT, type: port, target: env, default: 9000, required: true}
@@ -60,6 +61,7 @@ verification: {required_services: [web]}
 		{"service.sh", `set -eu
 case "$1" in
   install) mkdir -p ../data; touch ../data/keep; touch ../online ;;
+  update) test -f ../online; printf 'updated' > ../updated ;;
   uninstall) test ! -e ../data/refuse || exit 19; rm -f ../online ;;
   *) exit 77 ;;
 esac
@@ -161,6 +163,35 @@ func TestTwoAppsLifecycle(t *testing.T) {
 			t.Fatal("密钥未按字面值保存")
 		}
 	}
+	// Update must call the declared Deploy update script, reuse persisted
+	// secrets and never accept new config values without an explicit install.
+	updatedRef := refs[0]
+	updatedDigest := cacheFixture(t, cache, updatedRef.App)
+	if _, err := s.Start(ctx, testController, "update",
+		Request{Ref: updatedRef, Digest: updatedDigest, Config: map[string]string{"WEB_PORT": "9999"}}, granted); err == nil {
+		t.Fatal("更新请求不得覆盖已有安装配置")
+	}
+	updatedSecretPath := filepath.Join(appRoot(updatedRef), "deploy", ".secrets")
+	beforeSecret, err := os.ReadFile(updatedSecretPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Start(ctx, testController, "update",
+		Request{Ref: updatedRef, Digest: updatedDigest}, granted); err != nil {
+		t.Fatal("已安装应用无法启动更新脚本", err)
+	}
+	s.jobs.Wait()
+	updatedRecord, err := s.read(updatedRef.App)
+	if err != nil || updatedRecord.Action != "update" || updatedRecord.Result != "succeeded" {
+		t.Fatalf("更新任务结果异常：%+v %v", updatedRecord, err)
+	}
+	if content, err := os.ReadFile(filepath.Join(appRoot(updatedRef), updatedRef.App, "updated")); err != nil || string(content) != "updated" {
+		t.Fatal("更新未执行 Deploy 清单指定的 update 动作", err)
+	}
+	afterSecret, err := os.ReadFile(updatedSecretPath)
+	if err != nil || !bytes.Equal(beforeSecret, afterSecret) {
+		t.Fatal("更新不得改写已保存的凭据", err)
+	}
 	before := scans
 	rows, err := s.Status(ctx, testController, refs, false)
 	if err != nil || scans != before+1 || len(rows) != 2 || rows[0].State != "running" || rows[1].State != "running" {
@@ -202,5 +233,10 @@ func TestTwoAppsLifecycle(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(appRoot(refs[0]), refs[0].App, "data", "keep")); err != nil {
 		t.Fatal("卸载删除了数据")
+	}
+	if _, err := s.Start(ctx, testController, "update", Request{
+		Ref: refs[0], Digest: cacheFixture(t, cache, refs[0].App),
+	}, granted); err == nil {
+		t.Fatal("未安装的应用不能更新")
 	}
 }
