@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
@@ -26,12 +27,19 @@ func EqualToken(actual, expected string) bool {
 	return subtle.ConstantTimeCompare(a[:], b[:]) == 1
 }
 
+// HTTP 明文授权只在显式启用该传输模式的服务器内部注入，远程请求无法设置此标记。
+type transportKey struct{}
+
+func AllowConfiguredHTTP(r *http.Request) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), transportKey{}, true))
+}
+
 // RequireController is opt-in for each privileged endpoint. When there is no
 // verifier (until T01-04), no request can get privileged access.
 func RequireController(agentID string, verifier Verifier, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		if r.TLS == nil {
+		if r.TLS == nil && r.Context().Value(transportKey{}) != true {
 			writeDenied(w, http.StatusBadRequest, "tls_required")
 			return
 		}
