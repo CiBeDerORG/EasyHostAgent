@@ -120,7 +120,8 @@ func (s *Service) restoreLegacyScripts(app string, info bundles.CandidateInfo, f
 		expected["common.sh"] = 0644
 		expected["migrate.sh"] = 0644
 		expected["proxy-network.sh"] = 0755
-		required = append(required, "common.sh", "migrate.sh", "proxy-network.sh")
+		expected["default-profile.yaml"] = 0644
+		required = append(required, "common.sh", "migrate.sh", "proxy-network.sh", "default-profile.yaml")
 	case "opencode":
 		expected["Dockerfile"] = 0644
 		expected["docker-entrypoint.sh"] = 0755
