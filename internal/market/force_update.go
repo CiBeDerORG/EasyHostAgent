@@ -114,6 +114,18 @@ func (s *Service) restoreLegacyScripts(app string, info bundles.CandidateInfo, f
 		"lib.sh":              0644,
 	}
 	required := []string{"docker-compose.yaml", "install.sh", "update.sh", "uninstall.sh"}
+	// 仅补齐经过固定版本校验的各应用必需脚本，保留已有配置和数据。
+	switch app {
+	case "mihomo":
+		expected["common.sh"] = 0644
+		expected["migrate.sh"] = 0644
+		expected["proxy-network.sh"] = 0755
+		required = append(required, "common.sh", "migrate.sh", "proxy-network.sh")
+	case "opencode":
+		expected["Dockerfile"] = 0644
+		expected["docker-entrypoint.sh"] = 0755
+		required = append(required, "Dockerfile", "docker-entrypoint.sh")
+	}
 	found := make(map[string]bool, len(expected))
 	prefix := app + "/deploy/"
 	for _, item := range info.Files {
@@ -166,7 +178,30 @@ func (s *Service) restoreLegacyScripts(app string, info bundles.CandidateInfo, f
 // ForceUpdate is an explicit, confirmed recovery path only for a matching
 // legacy Sub2API/Portainer Compose project. It does not seize a same-name
 // container, import arbitrary scripts or bypass source/controller grants.
+// 对已受管项目，强制更新依然走完整的更新校验与已授权脚本，不绕过身份和来源检查。
 func (s *Service) ForceUpdate(ctx context.Context, controller string, req Request, authorized func() bool) (Record, error) {
+	if !req.ConfirmExternal || !req.Ref.valid() || !bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {
+		return Record{}, errors.New("强制更新需要明确确认及有效的固定版本安装包")
+	}
+	if !s.hasGrant(controller, req.Ref) || !authorized() {
+		return Record{}, ErrDenied
+	}
+	s.mu.Lock()
+	old, err := s.read(req.App)
+	s.mu.Unlock()
+	if err != nil {
+		return Record{}, err
+	}
+	if old.Managed {
+		if old.Source != req.Source {
+			return Record{}, ErrConflict
+		}
+		return s.Start(ctx, controller, "update", req, authorized)
+	}
+	return s.forceUpdateLegacy(ctx, controller, req, authorized)
+}
+
+func (s *Service) forceUpdateLegacy(ctx context.Context, controller string, req Request, authorized func() bool) (Record, error) {
 	if !req.ConfirmExternal || !req.Ref.valid() || !legacyDeployApp(req.App) ||
 		!bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {
 		return Record{}, errors.New("强制更新仅限明确确认的原有 Sub2API/Portainer Deploy 部署")
