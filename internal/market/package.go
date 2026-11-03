@@ -66,8 +66,11 @@ func loadManifest(info bundles.CandidateInfo, files map[string][]byte) (manifest
 		files[id+"/"+m.Runtime.File] == nil || !m.Data.Retain || len(m.Verification.Services) == 0 {
 		return m, errors.New("应用的 Compose 清单无效")
 	}
-	for _, name := range []string{"install", "uninstall"} {
-		a := m.Actions[name]
+	for _, name := range []string{"install", "update", "uninstall"} {
+		a, exists := m.Actions[name]
+		if name == "update" && !exists {
+			continue // Old application manifests may lack update; Start rejects when absent.
+		}
 		if a.Strategy == "compose_down" && name == "uninstall" && a.Path == "" && len(a.Argv) == 0 && !a.RemoveOrphans {
 			continue
 		}
