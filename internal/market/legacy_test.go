@@ -62,6 +62,8 @@ verification: {required_services: [api]}
 	for _, action := range []string{"install", "update", "uninstall"} {
 		write(app+"/deploy/"+action+".sh", "echo ok\n", "0755")
 	}
+	// 用于验证新增应用的辅助文件由清单驱动修复，不依赖应用 ID 白名单。
+	write(app+"/deploy/custom-migrate.sh", "echo migrate\n", "0755")
 	raw, err := json.Marshal(info)
 	if err != nil {
 		t.Fatal(err)
@@ -278,6 +280,9 @@ func TestForceUpdateRepairsMissingLegacyScriptAndPreservesData(t *testing.T) {
 	if st, err := os.Stat(filepath.Join(work, "uninstall.sh")); err != nil || st.Mode().Perm() != 0755 {
 		t.Fatal("没有从可信包修复缺失的卸载脚本")
 	}
+	if st, err := os.Stat(filepath.Join(work, "custom-migrate.sh")); err != nil || st.Mode().Perm() != 0755 {
+		t.Fatal("没有按清单修复新增的应用辅助脚本")
+	}
 	compose, err := os.ReadFile(filepath.Join(work, "docker-compose.yaml"))
 	if err != nil || string(compose) != "services: {api: {image: example}}\n" {
 		t.Fatalf("没有从固定 Git 应用包恢复缺失的 Compose 文件: %q %v", compose, err)
@@ -416,5 +421,103 @@ func TestHistoricalOpenCodeComposeProjectIsOnlyReadOnlyLinked(t *testing.T) {
 	rows, err = svc.Status(ctx, testController, []Ref{ref}, false)
 	if err != nil || rows[0].State != "not_installed" || rows[0].External {
 		t.Fatalf("目录不一致不能关联同名容器: %+v %v", rows, err)
+	}
+}
+
+func TestNewDeployAppUsesCanonicalDirectoryWithoutAppGrant(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	softwareRoot := filepath.Join(base, "software")
+	data := filepath.Join(base, "data")
+	if err := os.MkdirAll(data, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := bundles.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{Source: testSource, App: "brand-new-app"}
+	digest := legacyBundle(t, cache, ref.App)
+	agent, err := New(ctx, config.Config{SoftwareRoot: softwareRoot, DataDir: data, Platform: "linux"}, "", cache,
+		func(context.Context) (dockerengine.GroupedInventory, error) {
+			return dockerengine.GroupedInventory{Complete: true}, nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := agent.Start(ctx, testController, "install", Request{Ref: ref, Digest: digest}, func() bool { return true })
+	if err != nil || !rec.Managed || rec.Mode != directDeployMode {
+		t.Fatalf("新 Deploy 应用未通过通用安装流程: %+v %v", rec, err)
+	}
+	agent.jobs.Wait()
+	installed, err := agent.read(ref.App)
+	if err != nil || installed.Result != "succeeded" {
+		t.Fatalf("安装脚本执行异常: %+v %v", installed, err)
+	}
+	for _, path := range []string{
+		filepath.Join(softwareRoot, ref.App, "deploy", "install.sh"),
+		filepath.Join(softwareRoot, ref.App, "deploy", "custom-migrate.sh"),
+		filepath.Join(softwareRoot, "deploy", ".env"),
+		filepath.Join(softwareRoot, "deploy", ".secrets"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("标准 Deploy 文件缺失: %s: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(softwareRoot, ".easyhostagent-apps")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("标准 Deploy 应用不应再新建私有安装目录")
+	}
+	// 受管记录仍存在时，断线或容器消失只报告 missing，不把数据或脚本当作已卸载。
+	rows, err := agent.Status(ctx, testController, []Ref{ref}, false)
+	if err != nil || len(rows) != 1 || rows[0].State != "missing" || !rows[0].Managed {
+		t.Fatalf("缺失的容器不得触发误卸载: %+v %v", rows, err)
+	}
+}
+
+func TestUnlistedLegacyDeployAppCanBeLinkedWithoutPerAppGrant(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	root := filepath.Join(base, "software")
+	data := filepath.Join(base, "data")
+	work := filepath.Join(root, "brand-new-app", "deploy")
+	if err := os.MkdirAll(work, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"docker-compose.yaml", "install.sh", "update.sh", "uninstall.sh"} {
+		if err := os.WriteFile(filepath.Join(work, name), []byte("echo ok\n"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(data, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := bundles.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{Source: testSource, App: "brand-new-app"}
+	digest := legacyBundle(t, cache, ref.App)
+	project := dockerengine.Resource{ComposeProject: ref.App, Status: "running",
+		Containers: []dockerengine.Container{{Labels: map[string]string{
+			"com.docker.compose.project": ref.App,
+			"com.docker.compose.service": "api",
+			"com.docker.compose.project.working_dir": work,
+			"com.docker.compose.project.config_files": filepath.Join(work, "docker-compose.yaml"),
+		}}},
+	}
+	agent, err := New(ctx, config.Config{SoftwareRoot: root, DataDir: data, Platform: "linux"}, "", cache,
+		func(context.Context) (dockerengine.GroupedInventory, error) {
+			return dockerengine.GroupedInventory{Complete: true, Resources: []dockerengine.Resource{project}}, nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := agent.Status(ctx, testController, []Ref{ref}, false)
+	if err != nil || len(rows) != 1 || !rows[0].Adoptable || !rows[0].External {
+		t.Fatalf("未登记的新应用应识别可信 Deploy 安装: %+v %v", rows, err)
+	}
+	rec, err := agent.Adopt(ctx, testController, Request{Ref: ref, Digest: digest}, func() bool { return true })
+	if err != nil || !rec.Managed || rec.Mode != legacyDeployMode {
+		t.Fatalf("新应用无法自动关联: %+v %v", rec, err)
 	}
 }
