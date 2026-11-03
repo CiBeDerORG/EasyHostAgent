@@ -1,0 +1,11 @@
+.git
+.github
+dist
+bin
+tests
+docs
+*.md
+.env
+.secrets
+**/.env
+**/.secrets
