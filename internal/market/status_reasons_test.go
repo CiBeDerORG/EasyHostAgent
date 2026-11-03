@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -14,6 +15,9 @@ func TestStatusExplainsGrantAndExternalOwnership(t *testing.T) {
 	ctx := context.Background()
 	data := filepath.Join(t.TempDir(), "data")
 	software := filepath.Join(t.TempDir(), "software")
+	if err := os.MkdirAll(data, 0700); err != nil {
+		t.Fatal(err)
+	}
 	cache, err := bundles.New(data)
 	if err != nil {
 		t.Fatal(err)
