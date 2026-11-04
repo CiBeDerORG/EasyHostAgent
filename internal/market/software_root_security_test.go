@@ -14,8 +14,8 @@ func TestFnOSAdministratorOwnedPathScope(t *testing.T) {
 	root := "/vol3/1000/software"
 	cases := []struct {
 		path, softwareRoot, platform string
-		uid                         uint32
-		allow                       bool
+		uid                          uint32
+		allow                        bool
 	}{
 		{"/vol3/1000", root, "fnos", 1000, true},
 		{"/vol3/1000/software", root, "fnos", 1000, true},
