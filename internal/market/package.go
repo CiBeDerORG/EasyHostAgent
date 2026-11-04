@@ -380,26 +380,31 @@ func prepareConfig(root, platform string, fields []field, input map[string]strin
 		}
 		v, stored := c.values[f.Key]
 		in, provided := input[f.Key]
-		if f.Type == "secret" && stored && v != "" && provided && in != "" && in != v {
-			return nil, fmt.Errorf("%s 已有凭据，重新安装将保留原值", f.Key)
-		}
-		if provided && f.Editable != nil && !*f.Editable {
-			return nil, errors.New("配置字段只读")
-		}
-		if provided && !(f.Type == "secret" && in == "" && stored) {
-			v = in
-		} else if !stored && f.Default != nil {
-			v = *f.Default
+		// Installed credentials are authoritative. Application re-installation
+		// must never replace them, even when the UI submits a different secret.
+		// Explicit credential rotation requires a separate authenticated flow.
+		preserveSecret := f.Type == "secret" && stored && v != ""
+		if !preserveSecret {
+			if provided && f.Editable != nil && !*f.Editable {
+				return nil, errors.New("配置字段只读")
+			}
+			if provided {
+				v = in
+			} else if !stored && f.Default != nil {
+				v = *f.Default
+			}
 		}
 		if update {
 			if err := f.validate(v); err != nil {
 				return nil, err
 			}
-			line := f.Key + "=\"" + v + "\""
-			if i, ok := c.index[f.Key]; ok {
-				c.lines[i] = line
-			} else {
-				c.lines = append(c.lines, line)
+			if !preserveSecret {
+				line := f.Key + "=\"" + v + "\""
+				if i, ok := c.index[f.Key]; ok {
+					c.lines[i] = line
+				} else {
+					c.lines = append(c.lines, line)
+				}
 			}
 		}
 		values[f.Key] = v
