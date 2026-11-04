@@ -36,8 +36,12 @@ func trustedManagedDir(dir, softwareRoot, platform string) error {
 		return err
 	}
 	st, err := os.Lstat(dir)
-	if err != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm()&0022 != 0 {
-		return errors.New("Deploy 目录不存在或权限不安全")
+	if err != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 {
+		return errors.New("Deploy 目录不存在或类型不安全")
+	}
+	if !trustedDirectoryMode(dir, softwareRoot, platform, st) {
+		meta := st.Sys().(*syscall.Stat_t)
+		return fmt.Errorf("Deploy 目录写权限不可信：%s（mode=%04o UID=%d GID=%d）", dir, st.Mode().Perm(), meta.Uid, meta.Gid)
 	}
 	owner, ok := st.Sys().(*syscall.Stat_t)
 	if !ok || !trustedPathOwner(dir, softwareRoot, platform, owner.Uid) {
@@ -86,8 +90,8 @@ func materializeDeploy(softwareRoot, platform string, info bundles.CandidateInfo
 		target := filepath.Join(dir, parts[len(parts)-1])
 		st, err := os.Lstat(target)
 		if err == nil {
-			if !st.Mode().IsRegular() || st.Mode().Perm()&0022 != 0 {
-				return errors.New("已有部署文件类型或权限不安全，禁止覆盖")
+			if !st.Mode().IsRegular() || !trustedDirectoryMode(target, softwareRoot, platform, st) {
+				return fmt.Errorf("已有部署文件类型或写权限不安全，禁止覆盖：%s", target)
 			}
 			owner, ok := st.Sys().(*syscall.Stat_t)
 			if !ok || !trustedPathOwner(target, softwareRoot, platform, owner.Uid) {
