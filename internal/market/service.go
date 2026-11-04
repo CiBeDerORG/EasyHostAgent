@@ -384,7 +384,7 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 			return old, nil
 		}
 	}
-	if err = ensureSoftwareRoot(filepath.Dir(s.root)); err != nil {
+	if err = ensureSoftwareRoot(filepath.Dir(s.root), s.platform); err != nil {
 		return Record{}, errors.New("软件根目录不可用或可被其他用户替换")
 	}
 	for _, dir := range []string{s.root, sourceRoot, root} {
@@ -397,7 +397,7 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	}
 	// Update reuses the existing env/secrets and never overwrites user settings.
 	// The update.sh from the validated Deploy application bundle is authoritative.
-	values, err := prepareConfig(root, m.Config, req.Config, name == "install")
+	values, err := prepareConfig(root, s.platform, m.Config, req.Config, name == "install")
 	if err != nil {
 		return Record{}, err
 	}

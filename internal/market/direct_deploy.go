@@ -31,7 +31,7 @@ func deployLayout(m manifest) bool {
 }
 
 // 新的标准应用直接落地到 Deploy 约定目录；目录须不可被普通用户篡改。
-func trustedManagedDir(dir string) error {
+func trustedManagedDir(dir, softwareRoot, platform string) error {
 	if err := os.Mkdir(dir, 0700); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
@@ -40,15 +40,15 @@ func trustedManagedDir(dir string) error {
 		return errors.New("Deploy 目录不存在或权限不安全")
 	}
 	owner, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || (owner.Uid != 0 && owner.Uid != uint32(os.Geteuid())) {
-		return errors.New("Deploy 目录所有者不可信")
+	if !ok || !trustedPathOwner(dir, softwareRoot, platform, owner.Uid) {
+		return fmt.Errorf("Deploy 目录所有者不可信：%s", dir)
 	}
 	return nil
 }
 
 // 只写清单中应用自身的文件及 deploy/lib/ 下的共享库；用户配置、数据绝不由安装包覆盖。
-func materializeDeploy(softwareRoot string, info bundles.CandidateInfo, files map[string][]byte) error {
-	if err := ensureSoftwareRoot(softwareRoot); err != nil {
+func materializeDeploy(softwareRoot, platform string, info bundles.CandidateInfo, files map[string][]byte) error {
+	if err := ensureSoftwareRoot(softwareRoot, platform); err != nil {
 		return err
 	}
 	for _, item := range info.Files {
@@ -79,7 +79,7 @@ func materializeDeploy(softwareRoot string, info bundles.CandidateInfo, files ma
 		dir := softwareRoot
 		for _, part := range parts[:len(parts)-1] {
 			dir = filepath.Join(dir, part)
-			if err := trustedManagedDir(dir); err != nil {
+			if err := trustedManagedDir(dir, softwareRoot, platform); err != nil {
 				return fmt.Errorf("部署目录不可用: %w", err)
 			}
 		}
@@ -90,7 +90,7 @@ func materializeDeploy(softwareRoot string, info bundles.CandidateInfo, files ma
 				return errors.New("已有部署文件类型或权限不安全，禁止覆盖")
 			}
 			owner, ok := st.Sys().(*syscall.Stat_t)
-			if !ok || (owner.Uid != 0 && owner.Uid != uint32(os.Geteuid())) {
+			if !ok || !trustedPathOwner(target, softwareRoot, platform, owner.Uid) {
 				return errors.New("已有部署文件所有者不可信")
 			}
 			if strings.HasPrefix(destination, "deploy/lib/") ||
@@ -142,7 +142,7 @@ func (s *Service) startDirectDeploy(ctx context.Context, req Request, name strin
 	}
 	softwareRoot := filepath.Dir(s.root)
 	if name != "uninstall" {
-		if err := materializeDeploy(softwareRoot, info, files); err != nil {
+		if err := materializeDeploy(softwareRoot, s.platform, info, files); err != nil {
 			return Record{}, fmt.Errorf("无法同步 Deploy 应用文件: %w", err)
 		}
 	}
@@ -151,7 +151,7 @@ func (s *Service) startDirectDeploy(ctx context.Context, req Request, name strin
 	}
 	var values map[string]string
 	if name == "install" {
-		values, err = prepareConfig(softwareRoot, m.Config, req.Config, true)
+		values, err = prepareConfig(softwareRoot, s.platform, m.Config, req.Config, true)
 		if err != nil {
 			return Record{}, err
 		}

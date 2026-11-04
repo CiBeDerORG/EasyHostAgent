@@ -143,8 +143,36 @@ func privateDir(dir string) error {
 	return nil
 }
 
-// 逐级核对软件根目录，避免从共享可写目录替换将以 Agent 身份执行的脚本。
-func ensureSoftwareRoot(dir string) error {
+// 飞牛管理员可维护 /volN/<UID>/software。只对 fnOS 的这类固定目录
+// 信任与目录名相同的 UID；其余路径仍执行 root 所有权检查。
+func fnosTrustedOwner(path, softwareRoot, platform string, owner uint32) bool {
+	if platform != "fnos" || os.Geteuid() != 0 {
+		return false
+	}
+	softwareRoot = filepath.Clean(softwareRoot)
+	path = filepath.Clean(path)
+	parts := strings.Split(strings.Trim(softwareRoot, "/"), "/")
+	if len(parts) != 3 || parts[2] != "software" || !strings.HasPrefix(parts[0], "vol") {
+		return false
+	}
+	if _, err := strconv.ParseUint(strings.TrimPrefix(parts[0], "vol"), 10, 32); err != nil {
+		return false
+	}
+	uid, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil || uid == 0 || owner != uint32(uid) {
+		return false
+	}
+	home := filepath.Dir(softwareRoot)
+	return path == home || path == softwareRoot || strings.HasPrefix(path, softwareRoot+string(filepath.Separator))
+}
+
+func trustedPathOwner(path, softwareRoot, platform string, owner uint32) bool {
+	return owner == 0 || owner == uint32(os.Geteuid()) ||
+		fnosTrustedOwner(path, softwareRoot, platform, owner)
+}
+
+// 逐级检查软件根目录；包括拒绝符号链接和组/其他用户可写的路径。
+func ensureSoftwareRoot(dir, platform string) error {
 	if !filepath.IsAbs(dir) {
 		return errors.New("软件根目录必须为绝对路径")
 	}
@@ -156,11 +184,14 @@ func ensureSoftwareRoot(dir string) error {
 		}
 		st, err := os.Lstat(current)
 		if err != nil || !st.IsDir() {
-			return errors.New("软件根目录不可经过符号链接")
+			return fmt.Errorf("软件根目录不可经过符号链接：%s", current)
 		}
 		uid := st.Sys().(*syscall.Stat_t).Uid
-		if (uid != 0 && uid != uint32(os.Geteuid())) || (st.Mode().Perm()&0022 != 0 && st.Mode()&os.ModeSticky == 0) {
-			return errors.New("软件根目录不能由其他用户替换")
+		if !trustedPathOwner(current, dir, platform, uid) {
+			return fmt.Errorf("软件根目录不能由其他用户替换：%s (UID %d)", current, uid)
+		}
+		if st.Mode().Perm()&0022 != 0 && st.Mode()&os.ModeSticky == 0 {
+			return fmt.Errorf("软件根目录存在组或其他用户写权限：%s", current)
 		}
 	}
 	return nil
@@ -269,9 +300,9 @@ func readConfig(path string) (*configFile, error) {
 	return c, nil
 }
 
-func prepareConfig(root string, fields []field, input map[string]string, update bool) (map[string]string, error) {
+func prepareConfig(root, platform string, fields []field, input map[string]string, update bool) (map[string]string, error) {
 	dir := filepath.Join(root, "deploy")
-	if err := trustedManagedDir(dir); err != nil {
+	if err := trustedManagedDir(dir, root, platform); err != nil {
 		return nil, err
 	}
 	configs := map[string]*configFile{}
