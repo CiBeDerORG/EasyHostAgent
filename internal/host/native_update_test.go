@@ -111,8 +111,8 @@ func TestNativeUpdateFnOSOwnerScope(t *testing.T) {
 	const root = "/vol3/1000/software"
 	for _, tc := range []struct {
 		name, path, softwareRoot, platform string
-		uid                               uint32
-		allowed                           bool
+		uid                                uint32
+		allowed                            bool
 	}{
 		{"software", root, root, "fnos", 1000, true},
 		{"admin-home", "/vol3/1000", root, "fnos", 1000, true},
