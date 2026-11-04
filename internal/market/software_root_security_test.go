@@ -74,3 +74,50 @@ func TestSoftwareRootRejectsSymlinkAndWritableParent(t *testing.T) {
 		t.Fatal("不得接受组或其他用户可写的目录")
 	}
 }
+
+func TestFnOSAdministratorGroupWritePolicy(t *testing.T) {
+	root := "/vol3/1000/software"
+	for _, tc := range []struct {
+		name, path, softwareRoot, platform string
+		uid, gid, adminGID                uint32
+		want                              bool
+	}{
+		{"admin-group-root", root, root, "fnos", 1000, 1000, 1000, true},
+		{"admin-group-child", root + "/portainer/deploy", root, "fnos", 1000, 1000, 1000, true},
+		{"admin-group-under-home", "/vol3/1000", root, "fnos", 1000, 1000, 1000, true},
+		{"root-owner-admin-group", root, root, "fnos", 0, 1000, 1000, true},
+		{"users-group", root, root, "fnos", 1000, 1001, 1000, false},
+		{"other-users-group", root, root, "fnos", 1000, 1002, 1000, false},
+		{"no-admin-group", root, root, "fnos", 1000, 1000, 0, false},
+		{"other-owner", root, root, "fnos", 1001, 1000, 1000, false},
+		{"other-user-folder", "/vol3/1001/software", root, "fnos", 1000, 1000, 1000, false},
+		{"linux-not-fnos", root, root, "linux", 1000, 1000, 1000, false},
+		{"outside-root", "/vol3/1000/software-other", root, "fnos", 1000, 1000, 1000, false},
+		{"unrelated-root", "/tmp/1000/software", "/tmp/1000/software", "fnos", 1000, 1000, 1000, false},
+		{"wrong-subfolder", root, root + "/nested", "fnos", 1000, 1000, 1000, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := fnosAdminGroupWritePolicy(tc.path, tc.softwareRoot, tc.platform, tc.uid, tc.gid, tc.adminGID)
+			if got != tc.want {
+				t.Fatalf("fnosAdminGroupWritePolicy(...) = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDirectoryModeRejectsWorldWritableEvenOnFnOS(t *testing.T) {
+	path := t.TempDir()
+	if err := os.Chmod(path, 0777); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trustedDirectoryMode(path, "/vol3/1000/software", "fnos", st) {
+		t.Fatal("world writable directory may not be authorized on fnOS")
+	}
+	if trustedDirectoryMode(path, path, "linux", st) {
+		t.Fatal("world writable directory may not be authorized on Linux")
+	}
+}
