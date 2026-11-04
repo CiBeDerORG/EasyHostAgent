@@ -39,7 +39,16 @@ type Config struct {
 func Load() (Config, error) {
 	release, _ := os.ReadFile("/etc/os-release")
 	_, markerError := os.Stat("/etc/fnos-release")
-	return FromSources(os.Getenv, string(release), markerError == nil)
+	// fnOS commonly reports Debian in /etc/os-release. Its native version
+	// marker provides an additional host-only detection path.
+	return FromSources(os.Getenv, string(release), markerError == nil || fnOSVersionMarker("/usr/trim/etc/version"))
+}
+
+// The host's fnOS version marker must be a non-empty regular file. Do not
+// follow a symlink or trust a group/world-writable file for platform detection.
+func fnOSVersionMarker(path string) bool {
+	st, err := os.Lstat(path)
+	return err == nil && st.Mode().IsRegular() && st.Size() > 0 && st.Mode().Perm()&0022 == 0
 }
 
 func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) (Config, error) {
