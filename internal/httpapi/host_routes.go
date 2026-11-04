@@ -13,6 +13,23 @@ import (
 )
 
 func registerHost(mux *http.ServeMux, agentID string, store *pairing.Store, service *host.Service) {
+	mux.Handle("POST /v1/host/maintenance/{action}", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.PathValue("action") != "update" && r.PathValue("action") != "force-update" {
+				http.NotFound(w, r)
+				return
+			}
+			if r.ContentLength > 0 {
+				sendError(w, 400, "invalid_request", "Maintenance request must not contain a body")
+				return
+			}
+			if err := service.QueueSelfUpdate(r.Context(), r.PathValue("action")); err != nil {
+				sendError(w, http.StatusServiceUnavailable, "maintenance_unavailable", "Cannot schedule native update; inspect host systemd and Deploy installation")
+				return
+			}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(map[string]string{"state": "queued", "action": r.PathValue("action")})
+		})))
 	mux.Handle("/v1/host", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
 			return

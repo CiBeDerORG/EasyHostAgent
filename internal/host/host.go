@@ -30,6 +30,7 @@ var (
 type Service struct {
 	mu                                      sync.Mutex
 	dataDir, defaultRoot, platform, agentID string
+	startedAt                               string
 }
 type Settings struct {
 	SoftwareRoot string `json:"software_root"`
@@ -48,6 +49,7 @@ type Docker struct {
 }
 type Snapshot struct {
 	AgentID    string `json:"agent_id"`
+	StartedAt  string `json:"agent_started_at"`
 	ObservedAt string `json:"observed_at"`
 	Hostname   string `json:"hostname"`
 	Platform   string `json:"platform"`
@@ -68,7 +70,8 @@ func New(dataDir, defaultRoot, platform, agentID string) (*Service, error) {
 	if err := validateRoot(dataDir, defaultRoot); err != nil {
 		return nil, err
 	}
-	s := &Service{dataDir: dataDir, defaultRoot: defaultRoot, platform: platform, agentID: agentID}
+	s := &Service{dataDir: dataDir, defaultRoot: defaultRoot, platform: platform, agentID: agentID,
+		startedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if _, err := s.Root(); err != nil {
 		return nil, err
 	}
@@ -191,7 +194,7 @@ func (s *Service) Snapshot(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	hostName, _ := os.Hostname()
-	x := Snapshot{AgentID: s.agentID, ObservedAt: time.Now().UTC().Format(time.RFC3339), Hostname: hostName, Platform: s.platform, Arch: runtime.GOARCH, SoftwareRoot: root, Disks: []Disk{}}
+	x := Snapshot{AgentID: s.agentID, StartedAt: s.startedAt, ObservedAt: time.Now().UTC().Format(time.RFC3339), Hostname: hostName, Platform: s.platform, Arch: runtime.GOARCH, SoftwareRoot: root, Disks: []Disk{}}
 	x.CPU.LogicalCores = runtime.NumCPU()
 	if x.CPU.LogicalCores < 1 {
 		x.CPU.LogicalCores = 1
