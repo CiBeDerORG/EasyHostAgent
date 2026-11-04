@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 
@@ -28,6 +29,10 @@ func registerHost(mux *http.ServeMux, agentID string, store *pairing.Store, serv
 			return
 		}
 		if err := service.QueueSelfUpdate(r.Context(), r.PathValue("action")); err != nil {
+			// Never echo sensitive environment or command output to clients.
+			// A trusted administrator can inspect the failed preflight path in
+			// journalctl -u easyhostagent without exposing credentials to the UI.
+			slog.Warn("agent_self_update_rejected", "action", r.PathValue("action"), "reason", err.Error())
 			sendError(w, http.StatusServiceUnavailable, "maintenance_unavailable", "Cannot schedule native update; inspect host systemd and Deploy installation")
 			return
 		}
