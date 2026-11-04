@@ -73,8 +73,27 @@ func TestHostRoutesUseControllerAuthorization(t *testing.T) {
 	if code, _ := call("GET", "/v1/host", controllerB, token, ""); code != 401 {
 		t.Fatalf("other controller accepted: %d", code)
 	}
+	// 自更新入口与普通管理 API 使用同一配对令牌，不接受 GET、未知动作或非当前控制端。
+	if code, _ := call("POST", "/v1/host/maintenance/update", controllerB, token, ""); code != 401 {
+		t.Fatalf("其他控制端不得下发自更新: %d", code)
+	}
+	if code, _ := call("POST", "/v1/host/maintenance/force-update", controllerA, "bad", ""); code != 401 {
+		t.Fatalf("无效 Token 不得强制更新: %d", code)
+	}
+	if code, _ := call("POST", "/v1/host/maintenance/uninstall", controllerA, token, ""); code != 404 {
+		t.Fatalf("自维护接口不得开放卸载: %d", code)
+	}
+	if code, _ := call("GET", "/v1/host/maintenance/update", controllerA, token, ""); code != 405 {
+		t.Fatalf("自更新接口只接受 POST: %d", code)
+	}
+	if code, _ := call("POST", "/v1/host/maintenance/update", controllerA, token, `{"script":"rm -rf /"}`); code != 400 {
+		t.Fatalf("自更新请求不得接受脚本参数: %d", code)
+	}
+	if code, _ := call("POST", "/v1/host/maintenance/update", controllerA, token, ""); code != 503 {
+		t.Fatalf("缺少原生安装器时必须拒绝自更新: %d", code)
+	}
 	code1, snap := call("GET", "/v1/host", controllerA, token, "")
-	if code1 != 200 || snap["agent_id"] != state.AgentID || snap["software_root"] != filepath.Join(base, "software") {
+	if code1 != 200 || snap["agent_id"] != state.AgentID || snap["software_root"] != filepath.Join(base, "software") || snap["agent_started_at"] == "" {
 		t.Fatalf("host snapshot: %d %v", code1, snap)
 	}
 	next := filepath.Join(base, "next")
