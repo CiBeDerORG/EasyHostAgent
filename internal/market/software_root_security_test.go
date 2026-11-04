@@ -79,8 +79,8 @@ func TestFnOSAdministratorGroupWritePolicy(t *testing.T) {
 	root := "/vol3/1000/software"
 	for _, tc := range []struct {
 		name, path, softwareRoot, platform string
-		uid, gid, adminGID                uint32
-		want                              bool
+		uid, gid, adminGID                 uint32
+		want                               bool
 	}{
 		{"admin-group-root", root, root, "fnos", 1000, 1000, 1000, true},
 		{"admin-group-child", root + "/portainer/deploy", root, "fnos", 1000, 1000, 1000, true},
