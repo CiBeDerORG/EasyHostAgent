@@ -77,7 +77,7 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 			registerMarket(mux, state.AgentID, store, apps)
 		}
 		if service != nil {
-			registerHost(mux, state.AgentID, store, service)
+			registerHost(mux, state.AgentID, store, service, apps)
 		}
 		if engine != nil {
 			registerDocker(mux, state.AgentID, store, engine)

@@ -120,6 +120,13 @@ func (s *Service) Wait() {
 	s.jobs.Wait()
 }
 
+// Busy 在远程 Agent 自更新前检查是否仍有安装、更新或卸载任务正在执行。
+func (s *Service) Busy() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.active != ""
+}
+
 func (s *Service) Status(ctx context.Context, controller string, refs []Ref, includeManaged bool) ([]Status, error) {
 	if len(refs) > 256 {
 		return nil, errors.New("每批最多查询 256 个应用")
