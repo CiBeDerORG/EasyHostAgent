@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -171,6 +172,58 @@ func trustedPathOwner(path, softwareRoot, platform string, owner uint32) bool {
 		fnosTrustedOwner(path, softwareRoot, platform, owner)
 }
 
+// fnOS 1.2+ uses its own ACL scheme on volume directories. A group-writable
+// bit alone cannot distinguish a trusted administrator ACL from a shared
+// Users-group grant. Only accept the actual fnOS "Administrators" group,
+// owned by the trusted administrator of the fixed /volN/UID/software tree.
+// Other groups and world-writable directories remain forbidden.
+func fnosAdminGroupWritePolicy(path, softwareRoot, platform string, ownerUID, ownerGID, adminGID uint32) bool {
+	if platform != "fnos" || adminGID == 0 || ownerGID != adminGID {
+		return false
+	}
+	parts := strings.Split(strings.Trim(filepath.Clean(softwareRoot), "/"), "/")
+	if len(parts) != 3 || parts[2] != "software" || !strings.HasPrefix(parts[0], "vol") {
+		return false
+	}
+	if _, err := strconv.ParseUint(strings.TrimPrefix(parts[0], "vol"), 10, 32); err != nil {
+		return false
+	}
+	adminUID, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil || adminUID != 1000 || (ownerUID != 0 && ownerUID != uint32(adminUID)) {
+		return false
+	}
+	path = filepath.Clean(path)
+	root := filepath.Clean(softwareRoot)
+	return path == filepath.Dir(root) || path == root ||
+		strings.HasPrefix(path, root+string(filepath.Separator))
+}
+
+func fnosAdminGroupWritable(path, softwareRoot, platform string, st os.FileInfo) bool {
+	if os.Geteuid() != 0 || st.Mode().Perm()&0002 != 0 {
+		return false
+	}
+	admins, err := user.LookupGroup("Administrators")
+	if err != nil {
+		return false
+	}
+	gid, err := strconv.ParseUint(admins.Gid, 10, 32)
+	if err != nil {
+		return false
+	}
+	meta, ok := st.Sys().(*syscall.Stat_t)
+	return ok && fnosAdminGroupWritePolicy(path, softwareRoot, platform, meta.Uid, meta.Gid, uint32(gid))
+}
+
+// Never allow world-writable directories; accept group-write only when it
+// belongs to the dedicated fnOS Administrators group under the trusted path.
+func trustedDirectoryMode(path, softwareRoot, platform string, st os.FileInfo) bool {
+	mode := st.Mode()
+	if mode.Perm()&0002 != 0 {
+		return false
+	}
+	return mode.Perm()&0020 == 0 || fnosAdminGroupWritable(path, softwareRoot, platform, st)
+}
+
 // 逐级检查软件根目录；包括拒绝符号链接和组/其他用户可写的路径。
 func ensureSoftwareRoot(dir, platform string) error {
 	if !filepath.IsAbs(dir) {
@@ -190,8 +243,11 @@ func ensureSoftwareRoot(dir, platform string) error {
 		if !trustedPathOwner(current, dir, platform, uid) {
 			return fmt.Errorf("软件根目录不能由其他用户替换：%s (UID %d)", current, uid)
 		}
-		if st.Mode().Perm()&0022 != 0 && st.Mode()&os.ModeSticky == 0 {
-			return fmt.Errorf("软件根目录存在组或其他用户写权限：%s", current)
+		if !trustedDirectoryMode(current, dir, platform, st) &&
+			(st.Mode()&os.ModeSticky == 0 || st.Mode().Perm()&0002 == 0) {
+			metadata := st.Sys().(*syscall.Stat_t)
+			return fmt.Errorf("软件根目录写权限不可信：%s（mode=%04o UID=%d GID=%d，只有飞牛 Administrators 组可写例外）",
+				current, st.Mode().Perm(), metadata.Uid, metadata.Gid)
 		}
 	}
 	return nil
