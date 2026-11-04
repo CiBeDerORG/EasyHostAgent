@@ -39,7 +39,7 @@ func TestPrepareConfigKeepsExistingCredentialDespiteSubmittedPassword(t *testing
 	secrets := filepath.Join(root, "deploy", ".secrets")
 	for _, candidate := range []string{"a-different-password-456", "", "existing-password-123"} {
 		values, err := prepareConfig(root, "linux", testPortainerFields(), map[string]string{
-			"PORTAINER_HTTP_PORT":     "7005",
+			"PORTAINER_HTTP_PORT":      "7005",
 			"PORTAINER_ADMIN_PASSWORD": candidate,
 		}, true)
 		if err != nil {
@@ -70,7 +70,7 @@ func TestPrepareConfigFirstInstallRequiresSecret(t *testing.T) {
 		t.Fatalf("new install with no password must fail validation: %v", err)
 	}
 	values, err := prepareConfig(root, "linux", testPortainerFields(), map[string]string{
-		"PORTAINER_HTTP_PORT":     "7004",
+		"PORTAINER_HTTP_PORT":      "7004",
 		"PORTAINER_ADMIN_PASSWORD": "new-valid-password-123",
 	}, true)
 	if err != nil || values["PORTAINER_ADMIN_PASSWORD"] != "new-valid-password-123" {
@@ -81,7 +81,7 @@ func TestPrepareConfigFirstInstallRequiresSecret(t *testing.T) {
 func TestPrepareConfigRejectsInvalidExistingCredential(t *testing.T) {
 	root := testPortainerConfigRoot(t, "PORTAINER_ADMIN_PASSWORD=\"short\"\n")
 	_, err := prepareConfig(root, "linux", testPortainerFields(), map[string]string{
-		"PORTAINER_HTTP_PORT":     "7004",
+		"PORTAINER_HTTP_PORT":      "7004",
 		"PORTAINER_ADMIN_PASSWORD": "another-long-password",
 	}, true)
 	if err == nil || !strings.Contains(err.Error(), "PORTAINER_ADMIN_PASSWORD") {
