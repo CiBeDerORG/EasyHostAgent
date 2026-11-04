@@ -52,7 +52,7 @@ func nativeUpdateFixture(t *testing.T) (string, string, string, string) {
 func TestNativeUpdateRejectsInvalidAction(t *testing.T) {
 	root, runner, _, marker := nativeUpdateFixture(t)
 	for _, action := range []string{"", "uninstall", "restart", "update;rm -rf"} {
-		if err := queueNativeUpdate(context.Background(), root, action, runner, marker, uint32(os.Geteuid())); !errors.Is(err, ErrNativeUpdateUnavailable) {
+		if err := queueNativeUpdate(context.Background(), root, "linux", action, runner, marker, uint32(os.Geteuid())); !errors.Is(err, ErrNativeUpdateUnavailable) {
 			t.Fatalf("非法更新操作未拒绝: %s %v", action, err)
 		}
 	}
@@ -67,10 +67,10 @@ func TestNativeUpdateRejectsUnsafeScript(t *testing.T) {
 	if err := os.Symlink("/tmp/untrusted.sh", script); err != nil {
 		t.Fatal(err)
 	}
-	if err := queueNativeUpdate(context.Background(), root, "update", runner, marker, uint32(os.Geteuid())); !errors.Is(err, ErrNativeUpdateUnavailable) {
+	if err := queueNativeUpdate(context.Background(), root, "linux", "update", runner, marker, uint32(os.Geteuid())); !errors.Is(err, ErrNativeUpdateUnavailable) {
 		t.Fatalf("脚本符号链接必须拒绝: %v", err)
 	}
-	if err := validateNativePath(filepath.Join(root, "deploy", ".env"), false, uint32(os.Geteuid())+1); !errors.Is(err, ErrNativeUpdateUnavailable) {
+	if err := validateNativePath(filepath.Join(root, "deploy", ".env"), false, root, "linux", uint32(os.Geteuid())+1); !errors.Is(err, ErrNativeUpdateUnavailable) {
 		t.Fatal("运行配置文件所有者不可信也必须拒绝")
 	}
 }
@@ -84,7 +84,7 @@ func TestNativeUpdateQueuesDetachedSystemdJob(t *testing.T) {
 		{"update", "update.sh"},
 		{"force-update", "install.sh"},
 	} {
-		if err := queueNativeUpdate(context.Background(), root, tc.action, runner, marker, uint32(os.Geteuid())); err != nil {
+		if err := queueNativeUpdate(context.Background(), root, "linux", tc.action, runner, marker, uint32(os.Geteuid())); err != nil {
 			t.Fatalf("%s 调度失败: %v", tc.action, err)
 		}
 		raw, err := os.ReadFile(result)
@@ -104,5 +104,47 @@ func TestNativeUpdateQueuesDetachedSystemdJob(t *testing.T) {
 		if strings.Contains(out, "uninstall") {
 			t.Fatal("原生 Agent 不允许远程卸载")
 		}
+	}
+}
+
+func TestNativeUpdateFnOSOwnerScope(t *testing.T) {
+	const root = "/vol3/1000/software"
+	for _, tc := range []struct {
+		name, path, softwareRoot, platform string
+		uid                               uint32
+		allowed                           bool
+	}{
+		{"software", root, root, "fnos", 1000, true},
+		{"admin-home", "/vol3/1000", root, "fnos", 1000, true},
+		{"script", root + "/easyhostagent/deploy/install.sh", root, "fnos", 1000, true},
+		{"volume-parent", "/vol3", root, "fnos", 1000, false},
+		{"etc-marker", "/etc/easyhostagent/managed-by-installer", root, "fnos", 1000, false},
+		{"users-group-path", "/vol3/1001/software", root, "fnos", 1000, false},
+		{"sibling", root + "-other", root, "fnos", 1000, false},
+		{"other-platform", root, root, "linux", 1000, false},
+		{"other-user-owner", root, root, "fnos", 1001, false},
+		{"other-uid-root", "/vol3/1001/software", "/vol3/1001/software", "fnos", 1000, false},
+		{"other-root", "/tmp/1000/software", "/tmp/1000/software", "fnos", 1000, false},
+		{"wrong-root", root, root + "/deeper", "fnos", 1000, false},
+		{"volume-4", "/vol4/1000/software/deploy", "/vol4/1000/software", "fnos", 1000, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := fnosNativeUpdateOwner(tc.path, tc.softwareRoot, tc.platform, tc.uid)
+			if got != tc.allowed {
+				t.Fatalf("fnosNativeUpdateOwner(%q, %q, %q, %d)=%t want=%t",
+					tc.path, tc.softwareRoot, tc.platform, tc.uid, got, tc.allowed)
+			}
+		})
+	}
+}
+
+func TestNativeUpdateRejectsGroupWritableDirectory(t *testing.T) {
+	root, runner, _, marker := nativeUpdateFixture(t)
+	if err := os.Chmod(root, 0777); err != nil {
+		t.Fatal(err)
+	}
+	err := queueNativeUpdate(context.Background(), root, "linux", "update", runner, marker, uint32(os.Geteuid()))
+	if !errors.Is(err, ErrNativeUpdateUnavailable) || !strings.Contains(err.Error(), root) {
+		t.Fatalf("group/world writable source must be rejected with path detail: %v", err)
 	}
 }
