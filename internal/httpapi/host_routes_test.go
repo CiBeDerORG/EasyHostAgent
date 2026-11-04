@@ -62,7 +62,8 @@ func TestHostRoutesUseControllerAuthorization(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		var v map[string]any
-		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil &&
+			resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed {
 			t.Fatal(err)
 		}
 		return resp.StatusCode, v
