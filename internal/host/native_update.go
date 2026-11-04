@@ -59,7 +59,7 @@ func queueNativeUpdate(ctx context.Context, root, action, runner, marker string,
 	for path := filepath.Dir(root); path != "/"; path = filepath.Dir(path) {
 		st, err := os.Lstat(path)
 		if err != nil || st.Mode()&os.ModeSymlink != 0 || !st.IsDir() ||
-			st.Mode().Perm()&0022 != 0 {
+			st.Mode().Perm()&0022 != 0 && st.Mode()&os.ModeSticky == 0 {
 			return ErrNativeUpdateUnavailable
 		}
 	}
