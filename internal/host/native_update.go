@@ -22,7 +22,7 @@ func (s *Service) QueueSelfUpdate(ctx context.Context, action string) error {
 	if err != nil {
 		return ErrNativeUpdateUnavailable
 	}
-	return queueNativeUpdate(ctx, root, action, "systemd-run", 0)
+	return queueNativeUpdate(ctx, root, action, "systemd-run", "/etc/easyhostagent/managed-by-installer", 0)
 }
 
 func validateNativePath(path string, directory bool, owner uint32) error {
@@ -40,7 +40,7 @@ func validateNativePath(path string, directory bool, owner uint32) error {
 	return nil
 }
 
-func queueNativeUpdate(ctx context.Context, root, action, runner string, owner uint32) error {
+func queueNativeUpdate(ctx context.Context, root, action, runner, marker string, owner uint32) error {
 	if action != "update" && action != "force-update" ||
 		!filepath.IsAbs(root) || root == "/" || filepath.Clean(root) != root {
 		return ErrNativeUpdateUnavailable
@@ -70,7 +70,7 @@ func queueNativeUpdate(ctx context.Context, root, action, runner string, owner u
 		filepath.Join(root, "easyhostagent", "native", "scripts", "install.sh"),
 		filepath.Join(root, "deploy", "lib", "release-sources.sh"),
 		filepath.Join(root, "deploy", ".env"),
-		"/etc/easyhostagent/managed-by-installer",
+		marker,
 	}
 	for _, path := range scripts {
 		if err := validateNativePath(path, false, owner); err != nil {
