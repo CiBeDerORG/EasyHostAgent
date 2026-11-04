@@ -2,6 +2,8 @@ package config
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -96,5 +98,38 @@ func TestContainerPlatformExplicitOverride(t *testing.T) {
 				t.Fatalf("container host platform=%s, want=%s", cfg.Platform, tc.want)
 			}
 		})
+	}
+}
+
+func TestFnOSVersionMarkerOnDebianNativeHost(t *testing.T) {
+	version := filepath.Join(t.TempDir(), "version")
+	if fnOSVersionMarker(version) {
+		t.Fatal("missing version file must not identify fnOS")
+	}
+	if err := os.WriteFile(version, []byte("1.2.0505\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !fnOSVersionMarker(version) {
+		t.Fatal("regular read-only fnOS version file must be recognized")
+	}
+	cfg, err := FromSources(env(map[string]string{EnvSoftwareRoot: "/vol3/1000/software"}), "ID=debian\n", fnOSVersionMarker(version))
+	if err != nil || cfg.Platform != "fnos" {
+		t.Fatalf("Debian-based fnOS platform not recognized: %+v %v", cfg, err)
+	}
+	if err := os.Chmod(version, 0666); err != nil {
+		t.Fatal(err)
+	}
+	if fnOSVersionMarker(version) {
+		t.Fatal("group/world writable version file must not be trusted")
+	}
+	if err := os.Chmod(version, 0644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "version-link")
+	if err := os.Symlink(version, link); err != nil {
+		t.Fatal(err)
+	}
+	if fnOSVersionMarker(link) {
+		t.Fatal("symlink version marker must not be trusted")
 	}
 }
