@@ -3,9 +3,12 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -22,25 +25,63 @@ func (s *Service) QueueSelfUpdate(ctx context.Context, action string) error {
 	if err != nil {
 		return ErrNativeUpdateUnavailable
 	}
-	return queueNativeUpdate(ctx, root, action, "systemd-run", "/etc/easyhostagent/managed-by-installer", 0)
+	return queueNativeUpdate(ctx, root, s.platform, action, "systemd-run", "/etc/easyhostagent/managed-by-installer", 0)
 }
 
-func validateNativePath(path string, directory bool, owner uint32) error {
-	st, err := os.Lstat(path)
-	if err != nil || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm()&0022 != 0 {
-		return ErrNativeUpdateUnavailable
+// fnOS places managed software under the first administrator's home.
+// That administrator owns UID 1000 while the Agent runs as root. Only
+// /volN/1000 and its exact software subtree qualify; arbitrary user-owned
+// directories never become executable update sources.
+func fnosNativeUpdateOwner(path, softwareRoot, platform string, uid uint32) bool {
+	if platform != "fnos" || uid != 1000 {
+		return false
 	}
-	if directory && !st.IsDir() || !directory && !st.Mode().IsRegular() {
-		return ErrNativeUpdateUnavailable
+	softwareRoot = filepath.Clean(softwareRoot)
+	path = filepath.Clean(path)
+	parts := strings.Split(strings.Trim(softwareRoot, "/"), "/")
+	if len(parts) != 3 || parts[1] != "1000" || parts[2] != "software" ||
+		!strings.HasPrefix(parts[0], "vol") {
+		return false
+	}
+	if _, err := strconv.ParseUint(strings.TrimPrefix(parts[0], "vol"), 10, 32); err != nil {
+		return false
+	}
+	home := filepath.Dir(softwareRoot)
+	return path == home || path == softwareRoot ||
+		strings.HasPrefix(path, softwareRoot+string(filepath.Separator))
+}
+
+func trustedNativeUpdateOwner(path, softwareRoot, platform string, actual, expected uint32) bool {
+	return actual == 0 || actual == expected ||
+		(expected == 0 && fnosNativeUpdateOwner(path, softwareRoot, platform, actual))
+}
+
+func inspectNativeUpdatePath(path string, directory bool, root, platform string, owner uint32, allowSticky bool) error {
+	st, err := os.Lstat(path)
+	if err != nil {
+		return fmt.Errorf("%w: 更新依赖路径无法读取：%s: %v", ErrNativeUpdateUnavailable, path, err)
+	}
+	if st.Mode()&os.ModeSymlink != 0 ||
+		(directory && !st.IsDir()) || (!directory && !st.Mode().IsRegular()) {
+		return fmt.Errorf("%w: 更新依赖路径不是预期的真实文件或目录：%s", ErrNativeUpdateUnavailable, path)
+	}
+	if st.Mode().Perm()&0022 != 0 && !(allowSticky && st.Mode()&os.ModeSticky != 0) {
+		return fmt.Errorf("%w: 更新依赖路径允许组或其他用户修改：%s (mode=%04o)",
+			ErrNativeUpdateUnavailable, path, st.Mode().Perm())
 	}
 	sys, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || sys.Uid != owner {
-		return ErrNativeUpdateUnavailable
+	if !ok || !trustedNativeUpdateOwner(path, root, platform, sys.Uid, owner) {
+		return fmt.Errorf("%w: 更新依赖路径所有者不可信：%s",
+			ErrNativeUpdateUnavailable, path)
 	}
 	return nil
 }
 
-func queueNativeUpdate(ctx context.Context, root, action, runner, marker string, owner uint32) error {
+func validateNativePath(path string, directory bool, root, platform string, owner uint32) error {
+	return inspectNativeUpdatePath(path, directory, root, platform, owner, false)
+}
+
+func queueNativeUpdate(ctx context.Context, root, platform, action, runner, marker string, owner uint32) error {
 	if action != "update" && action != "force-update" ||
 		!filepath.IsAbs(root) || root == "/" || filepath.Clean(root) != root {
 		return ErrNativeUpdateUnavailable
@@ -51,16 +92,14 @@ func queueNativeUpdate(ctx context.Context, root, action, runner, marker string,
 		filepath.Join(root, "easyhostagent", "native", "scripts"), filepath.Join(root, "deploy"),
 		filepath.Join(root, "deploy", "lib")}
 	for _, dir := range dirs {
-		if err := validateNativePath(dir, true, owner); err != nil {
+		if err := validateNativePath(dir, true, root, platform, owner); err != nil {
 			return err
 		}
 	}
 	// 防止 SOFTWARE_ROOT 的任一上层目录通过符号链接重定向。
 	for path := filepath.Dir(root); path != "/"; path = filepath.Dir(path) {
-		st, err := os.Lstat(path)
-		if err != nil || st.Mode()&os.ModeSymlink != 0 || !st.IsDir() ||
-			st.Mode().Perm()&0022 != 0 && st.Mode()&os.ModeSticky == 0 {
-			return ErrNativeUpdateUnavailable
+		if err := inspectNativeUpdatePath(path, true, root, platform, owner, true); err != nil {
+			return err
 		}
 	}
 	scripts := []string{
@@ -73,7 +112,7 @@ func queueNativeUpdate(ctx context.Context, root, action, runner, marker string,
 		marker,
 	}
 	for _, path := range scripts {
-		if err := validateNativePath(path, false, owner); err != nil {
+		if err := validateNativePath(path, false, root, platform, owner); err != nil {
 			return err
 		}
 	}
@@ -89,7 +128,7 @@ func queueNativeUpdate(ctx context.Context, root, action, runner, marker string,
 	}
 	resolved, err := exec.LookPath(runner)
 	if err != nil || !filepath.IsAbs(resolved) {
-		return ErrNativeUpdateUnavailable
+		return fmt.Errorf("%w: systemd-run 不可执行或不存在", ErrNativeUpdateUnavailable)
 	}
 	commandCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -98,7 +137,7 @@ func queueNativeUpdate(ctx context.Context, root, action, runner, marker string,
 		"HOME=/root"}
 	// stderr 可能包含敏感运行环境，不回传；详细原因由开发者从 systemd journal 查询。
 	if err := cmd.Run(); err != nil {
-		return errors.New("无法排队独立 systemd 更新任务，可能已有任务正在执行")
+		return fmt.Errorf("%w: systemd-run 排队失败，可能已有任务正在执行：%v", ErrNativeUpdateUnavailable, err)
 	}
 	return nil
 }
