@@ -3,7 +3,7 @@ name: EasyHostAgent 原生程序发布
 on:
   push:
     branches:
-      - feat/docker-app-store
+      - feat/deploy-manifest-lifecycle
     paths:
       - "cmd/**"
       - "internal/**"
@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: easyhostagent-native-development-release
+  group: easyhostagent-native-deploy-manifest-release
   cancel-in-progress: true
 
 jobs:
@@ -57,9 +57,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="v0.1.0-appstore.dev"
+          tag="v0.1.0-deploy-manifest-lifecycle.dev"
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --target "$GITHUB_SHA" --title "EasyHostAgent 原生开发版" \
+            gh release create "$tag" --target "$GITHUB_SHA" --title "EasyHostAgent 生命周期开发版" \
               --notes "Linux AMD64/ARM64 原生 systemd 安装包，附 SHA-256 校验文件；此开发版标签及资产可更新。" \
               --prerelease
           fi

@@ -3,7 +3,7 @@ name: EasyHostAgent 多架构容器镜像
 on:
   push:
     branches:
-      - feat/docker-app-store
+      - feat/deploy-manifest-lifecycle
     paths:
       - "Dockerfile"
       - ".dockerignore"
@@ -56,7 +56,7 @@ jobs:
           build-args: |
             VCS_REF=${{ github.sha }}
           tags: |
-            ghcr.io/cibederorg/easyhostagent:feat-docker-app-store
+            ghcr.io/cibederorg/easyhostagent:feat-deploy-manifest-lifecycle
             ghcr.io/cibederorg/easyhostagent:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/CiBeDerORG/EasyHostAgent
