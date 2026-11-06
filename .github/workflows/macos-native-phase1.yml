@@ -1,0 +1,109 @@
+name: EasyHostAgent macOS 原生第一阶段验证与开发版发布
+
+on:
+  push:
+    branches:
+      - feat/macos-native-phase1-20261106
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - ".github/workflows/macos-native-phase1.yml"
+      - "go.mod"
+      - "go.sum"
+  pull_request:
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - ".github/workflows/macos-native-phase1.yml"
+      - "go.mod"
+      - "go.sum"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS ARM64 原生运行、HTTPS、配对与主机概况
+    runs-on: macos-15
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: 格式、静态检查与单元测试
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+          go test ./...
+      - name: 构建 Darwin ARM64 原生安装包
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Commit=$GITHUB_SHA" -o dist/easyhostagent-darwin-arm64 ./cmd/easyhostagent
+          shasum -a 256 dist/easyhostagent-darwin-arm64 | sed 's#dist/##' > dist/easyhostagent-darwin-arm64.sha256
+          file dist/easyhostagent-darwin-arm64
+      - name: macOS 实际执行 HTTPS、身份配对及主机状态
+        shell: bash
+        run: |
+          set -euo pipefail
+          export EASYHOSTAGENT_PLATFORM=macos
+          export EASYHOSTAGENT_DATA_DIR="$RUNNER_TEMP/agent-phase1-data"
+          export EASYHOSTAGENT_SOFTWARE_ROOT="$RUNNER_TEMP/phase1-software"
+          export EASYHOSTAGENT_LISTEN_ADDRESS=127.0.0.1:7018
+          export EASYHOSTAGENT_TRANSPORT=https
+          mkdir -p "$EASYHOSTAGENT_SOFTWARE_ROOT"
+          chmod 0700 "$EASYHOSTAGENT_SOFTWARE_ROOT"
+          ./dist/easyhostagent-darwin-arm64 -check-config
+          ./dist/easyhostagent-darwin-arm64 -identity
+          ./dist/easyhostagent-darwin-arm64 >"$RUNNER_TEMP/agent-phase1.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl --silent --fail --insecure https://127.0.0.1:7018/v1/health > "$RUNNER_TEMP/health.json"; then break; fi
+            sleep 1
+          done
+          python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["status"]=="ready"' "$RUNNER_TEMP/health.json"
+          curl --silent --fail --insecure https://127.0.0.1:7018/v1/identity >"$RUNNER_TEMP/identity.json"
+          python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["platform"]=="macos" and x["arch"]=="arm64" and x["app_manifest_versions"]==[]' "$RUNNER_TEMP/identity.json"
+          pairing="$(./dist/easyhostagent-darwin-arm64 -pairing-code)"
+          code="$(printf '%s\n' "$pairing" | sed -n 's/^One-time pairing code: //p')"
+          agent="$(printf '%s\n' "$pairing" | sed -n 's/^Agent ID: //p')"
+          test -n "$code" && test -n "$agent"
+          # 不输出一次性配对码与令牌；经真实 HTTPS 验证完整配对流程。
+          python3 -c 'import json,sys; json.dump({"controller_id":"11111111-1111-4111-8111-111111111111","device_id":"22222222-2222-4222-8222-222222222222","pairing_code":sys.argv[1]},open(sys.argv[2],"w"))' "$code" "$RUNNER_TEMP/pairing-request.json"
+          curl --silent --fail --insecure -H 'Content-Type: application/json' -d @"$RUNNER_TEMP/pairing-request.json" https://127.0.0.1:7018/v1/pairings >"$RUNNER_TEMP/paired.json"
+          token="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["access_token"])' "$RUNNER_TEMP/paired.json")"
+          curl --silent --fail --insecure -H "Authorization: Bearer $token" -H "X-EHA-Controller-ID: 11111111-1111-4111-8111-111111111111" -H "X-EHA-Agent-ID: $agent" https://127.0.0.1:7018/v1/host >"$RUNNER_TEMP/host.json"
+          python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["platform"]=="macos" and x["cpu"]["logical_cores"]>0 and x["memory"]["total_bytes"]>0 and x["disks"]; print("macOS host snapshot verified")' "$RUNNER_TEMP/host.json"
+          status="$(curl --silent --insecure -o /dev/null -w '%{http_code}' https://127.0.0.1:7018/v1/apps/status)"
+          test "$status" = 404
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easyhostagent-darwin-arm64-phase1
+          path: dist/easyhostagent-darwin-arm64*
+          retention-days: 14
+
+  release:
+    if: github.event_name != 'pull_request'
+    needs: macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: easyhostagent-darwin-arm64-phase1
+          path: dist
+      - name: 发布 macOS 第一阶段开发版
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=v0.1.0-macos-phase1.dev
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "EasyHostAgent macOS 原生第一阶段开发版" --prerelease --notes "darwin/arm64，HTTPS 身份配对及主机概况；Docker 与应用商店管理尚未开放。开发版资产可更新。"
+          fi
+          gh release upload "$tag" dist/easyhostagent-darwin-arm64 dist/easyhostagent-darwin-arm64.sha256 --clobber
