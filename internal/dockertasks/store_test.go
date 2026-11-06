@@ -1,12 +1,12 @@
 package dockertasks
 
 import (
-	"context"
 	"errors"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,18 +23,24 @@ func TestDockerTaskPersistsAndIdempotency(t *testing.T) {
 		t.Fatal(err)
 	}
 	var actions atomic.Int32
+	var stateMu sync.Mutex
 	state := "running"
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/version":
 			_, _ = w.Write([]byte(`{"ApiVersion":"1.41"}`))
 		case "/v1.41/containers/json":
-			_, _ = w.Write([]byte(`[{"Id":"web","State":"` + state + `","Labels":{}}]`))
+			stateMu.Lock()
+			current := state
+			stateMu.Unlock()
+			_, _ = w.Write([]byte(`[{"Id":"web","State":"` + current + `","Labels":{}}]`))
 		case "/v1.41/images/json":
 			_, _ = w.Write([]byte(`[]`))
 		case "/v1.41/containers/web/stop":
 			actions.Add(1)
+			stateMu.Lock()
 			state = "exited"
+			stateMu.Unlock()
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			http.NotFound(w, r)
@@ -136,5 +142,4 @@ func TestDockerTaskInterruptedOnRestart(t *testing.T) {
 	if _, err := next.Get("22222222-2222-4222-8222-222222222222"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("未知任务应返回 NotFound：%v", err)
 	}
-	_ = context.Background()
 }
