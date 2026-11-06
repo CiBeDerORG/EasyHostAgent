@@ -1,10 +1,9 @@
-// Package host provides on-demand, authenticated Linux host inspection and
+// Package host provides on-demand, authenticated cross-platform host inspection and
 // durable software root settings. It intentionally has no polling goroutines.
 package host
 
 import (
-	"bufio"
-	"context"
+		"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,8 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
-	"strings"
+		"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -229,35 +227,6 @@ func (s *Service) Snapshot(ctx context.Context) (Snapshot, error) {
 	}
 	x.Docker = docker(ctx)
 	return x, nil
-}
-func memory() (total, used uint64) {
-	f, err := os.Open("/proc/meminfo")
-	if err != nil {
-		return 0, 0
-	}
-	defer f.Close()
-	var available uint64
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		if len(fields) < 2 {
-			continue
-		}
-		n, e := strconv.ParseUint(fields[1], 10, 64)
-		if e != nil {
-			continue
-		}
-		switch fields[0] {
-		case "MemTotal:":
-			total = n * 1024
-		case "MemAvailable:":
-			available = n * 1024
-		}
-	}
-	if total >= available {
-		used = total - available
-	}
-	return total, used
 }
 func docker(ctx context.Context) Docker {
 	result := Docker{Available: false, ComposeAvailable: false}
