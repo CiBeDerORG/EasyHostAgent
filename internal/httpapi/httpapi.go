@@ -62,10 +62,15 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 		if arch != "amd64" && arch != "arm64" {
 			arch = "other"
 		}
+		manifestVersions := []int{1, 2}
+		if platform == "macos" {
+			// 首阶段不开放应用安装；不能向控制端虚报清单执行能力。
+			manifestVersions = []int{}
+		}
 		sendJSON(w, map[string]any{
 			"protocol_version": 1, "agent_id": state.AgentID, "hostname": host,
 			"platform": platform, "arch": arch, "version": version,
-			"app_manifest_versions": []int{1, 2},
+			"app_manifest_versions": manifestVersions,
 			"tls_spki_sha256":       state.SPKISHA256,
 			"observed_at":           time.Now().UTC().Format(time.RFC3339),
 		})
