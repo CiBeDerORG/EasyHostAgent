@@ -22,10 +22,11 @@ import (
 const testSource = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 const testController = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 
-func cacheFixture(t *testing.T, store *bundles.Store, id string) string {
+func cacheFixture(t *testing.T, store *bundles.Store, id string, requiresRoot ...bool) string {
 	t.Helper()
+	rootRequired := len(requiresRoot) > 0 && requiresRoot[0]
 	manifest := fmt.Sprintf(`id: %s
-runtime: {kind: docker_compose, compose_project: %s, compose_file: deploy/compose.yaml, requires_root: true}
+runtime: {kind: docker_compose, compose_project: %s, compose_file: deploy/compose.yaml, requires_root: %t}
 compatibility: {platforms: [linux, fnos, macos], architectures: [amd64, arm64]}
 actions:
   install: {strategy: script, path: deploy/service.sh, argv: [install]}
@@ -36,7 +37,7 @@ config:
   - {key: APP_TOKEN, type: secret, target: secrets, required: false}
 data: {default_retain: true}
 verification: {required_services: [web]}
-`, id, id)
+`, id, id, rootRequired)
 	var buf bytes.Buffer
 	zipper := zip.NewWriter(&buf)
 	put := func(name, body string, mode os.FileMode) {
@@ -261,7 +262,7 @@ func TestMacOSMarketInstallUpdateUninstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref := Ref{Source: testSource, App: "demo-macos"}
-	digest := cacheFixture(t, cache, ref.App)
+	digest := cacheFixture(t, cache, ref.App, true)
 	authorized := func() bool { return true }
 
 	if _, err := s.Start(ctx, testController, "install", Request{Ref: ref, Digest: digest}, authorized); err != nil {
