@@ -16,6 +16,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockertasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
@@ -46,6 +47,11 @@ func NewHandlerWithMarket(state identity.State, platform, version string, servic
 
 // NewHandlerWithMarketTransport 在显式配置 HTTP 时允许明文传输；默认继续强制 HTTPS。
 func NewHandlerWithMarketTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithDockerTasksTransport(state, platform, version, service, engine, cache, apps, nil, allowHTTP, stores...)
+}
+
+// NewHandlerWithDockerTasksTransport 只在传入已初始化的持久任务服务时开放 Docker 写操作。
+func NewHandlerWithDockerTasksTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, dockerTasks *dockertasks.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -87,6 +93,9 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 		}
 		if engine != nil {
 			registerDocker(mux, state.AgentID, store, engine)
+		}
+		if dockerTasks != nil {
+			registerDockerTasks(mux, state.AgentID, store, dockerTasks)
 		}
 		if cache != nil {
 			registerBundles(mux, state.AgentID, store, cache)

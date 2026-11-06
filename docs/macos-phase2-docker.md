@@ -35,3 +35,10 @@ ls -l "$HOME/.docker/run/docker.sock"
 通过 deploy 第一阶段安装/更新入口部署本分支编译出的 Agent 二进制（不得沿用第一阶段 Release 并声称已有 Docker API）。验证 `GET /v1/host` 的 `docker.available`，然后以已配对控制端调用 `GET /v1/docker/inventory` 并检查 `complete=true`。无需人工创建 /var/run/docker.sock，且 Docker Desktop 未运行时不应误报容器删除。
 
 参考：https://docs.docker.com/desktop/setup/install/mac-permission-requirements/
+
+## macOS Docker 操作任务（第二批）
+
+Agent 现在为 macOS Docker 资源提供经过配对授权的 `POST /v1/tasks`、`GET /v1/tasks`、`GET /v1/tasks/{task_id}` 和 `POST /v1/tasks/{task_id}/cancel`。
+只允许 `kind=docker_resource` 与 `action=start/stop/restart`；`resource_id` 必须是 `container:<id>` 或 `compose:<project>`，重新通过完整清单解析后才操作；不能注入任意命令。
+任务在开始执行前使用 0600 文件安全持久化，使用客户端 UUID 防止重试重复执行。同资源操作互斥，重启后未完成任务标记为 `interrupted` 且不会自动重试；取消可能留下已部分执行的容器，需重新查询状态。
+Compose 管理目前仅覆盖已存在的容器启动、停止、重启；不执行 Compose up/down、重建、删除数据或更新镜像。

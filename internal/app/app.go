@@ -17,6 +17,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockertasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
@@ -50,6 +51,15 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("初始化本机 Docker Engine: %w", err)
 	}
 	defer engine.Close()
+	// 先记录并校验持久任务，macOS 才启用受限的容器生命周期操作。
+	var dockerTasks *dockertasks.Service
+	if cfg.Platform == "macos" {
+		dockerTasks, err = dockertasks.New(cfg.DataDir, state.AgentID, engine)
+		if err != nil {
+			return fmt.Errorf("初始化 Docker 持久任务: %w", err)
+		}
+		defer dockerTasks.Close()
+	}
 	var bundleStore *bundles.Store
 	var apps *market.Service
 	if cfg.Platform != "macos" {
@@ -74,7 +84,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithMarketTransport(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, apps, cfg.Transport == "http", store),
+		Handler:           httpapi.NewHandlerWithDockerTasksTransport(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, apps, dockerTasks, cfg.Transport == "http", store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
