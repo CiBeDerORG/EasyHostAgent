@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,7 @@ const (
 	DefaultDataDir   = "/var/lib/easyhostagent"
 	DefaultLinuxRoot = "/opt/software"
 	DefaultFnOSRoot  = "/vol3/1000/software"
+	DefaultMacOSRoot = "/opt/software"
 	DefaultListen    = "0.0.0.0:7014"
 	EnvTransport     = "EASYHOSTAGENT_TRANSPORT"
 	EnvPlatform      = "EASYHOSTAGENT_PLATFORM"
@@ -37,6 +39,17 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	if runtime.GOOS == "darwin" {
+		if requested := os.Getenv(EnvPlatform); requested != "" && requested != "macos" {
+			return Config{}, fmt.Errorf("macOS 原生进程必须使用 EASYHOSTAGENT_PLATFORM=macos")
+		}
+		return FromSources(func(key string) string {
+			if key == EnvPlatform {
+				return "macos"
+			}
+			return os.Getenv(key)
+		}, "", false)
+	}
 	release, _ := os.ReadFile("/etc/os-release")
 	_, markerError := os.Stat("/etc/fnos-release")
 	// fnOS commonly reports Debian in /etc/os-release. Its native version
@@ -56,6 +69,7 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 		return Config{}, fmt.Errorf("environment getter is required")
 	}
 	isFn := fnosMarker || isFnOS(osRelease)
+	isMac := false
 	// 容器内 /etc/os-release 是镜像系统，平台必须由宿主机部署配置明确告知。
 	switch getenv(EnvPlatform) {
 	case "":
@@ -63,19 +77,31 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 		isFn = false
 	case "fnos":
 		isFn = true
+	case "macos":
+		isFn = false
+		isMac = true
 	default:
-		return Config{}, fmt.Errorf("EASYHOSTAGENT_PLATFORM 只能为 linux 或 fnos")
+		return Config{}, fmt.Errorf("EASYHOSTAGENT_PLATFORM 只能为 linux、fnos 或 macos")
 	}
 	root := getenv(EnvSoftwareRoot)
 	if root == "" {
 		root = DefaultLinuxRoot
 		if isFn {
 			root = DefaultFnOSRoot
+		} else if isMac {
+			root = DefaultMacOSRoot
 		}
 	}
 	dataDir := getenv(EnvDataDir)
 	if dataDir == "" {
 		dataDir = DefaultDataDir
+		if isMac {
+			home, err := os.UserHomeDir()
+			if err != nil || home == "" {
+				return Config{}, fmt.Errorf("无法确定 macOS 用户目录")
+			}
+			dataDir = filepath.Join(home, "Library", "Application Support", "EasyHostAgent")
+		}
 	}
 	transport := getenv(EnvTransport)
 	if transport == "" {
@@ -118,6 +144,8 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	platform := "linux"
 	if isFn {
 		platform = "fnos"
+	} else if isMac {
+		platform = "macos"
 	}
 	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level}, nil
 }
