@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/CiBeDerORG/EasyHostAgent/internal/dockertasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockertasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
