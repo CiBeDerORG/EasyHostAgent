@@ -242,7 +242,6 @@ func TestTwoAppsLifecycle(t *testing.T) {
 	}
 }
 
-
 func TestMacOSMarketInstallUpdateUninstall(t *testing.T) {
 	ctx := context.Background()
 	data := filepath.Join(t.TempDir(), "agent")
