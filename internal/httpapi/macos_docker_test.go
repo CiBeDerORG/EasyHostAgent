@@ -37,6 +37,9 @@ func TestMacOSDockerRoutesAreProtectedAndMarketRemainsDisabled(t *testing.T) {
 	if response := call("/v1/docker/inventory"); response.Code != http.StatusUnauthorized {
 		t.Fatalf("Mac Docker API 不得未经授权访问：%d", response.Code)
 	}
+	if response := call("/v1/docker/resources/container:test/stats"); response.Code != http.StatusUnauthorized {
+		t.Fatalf("Mac Docker 资源统计不得未经授权读取：%d", response.Code)
+	}
 	if response := call("/v1/docker/resources/container:test/logs"); response.Code != http.StatusUnauthorized {
 		t.Fatalf("Mac Docker 日志不得未经授权读取：%d", response.Code)
 	}

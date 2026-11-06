@@ -34,6 +34,33 @@ func registerDocker(mux *http.ServeMux, agentID string, store *pairing.Store, en
 		}
 		sendJSON(w, payload)
 	})))
+	mux.Handle("/v1/docker/resources/{resource_id}/stats", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !onlyGET(w, r) {
+			return
+		}
+		id := r.PathValue("resource_id")
+		if len(id) == 0 || len(id) > 256 {
+			sendError(w, http.StatusBadRequest, "invalid_resource", "无效的 Docker 资源标识")
+			return
+		}
+		snapshot, err := engine.ReadStats(r.Context(), id)
+		if err != nil {
+			switch {
+			case errors.Is(err, dockerengine.ErrResourceNotFound):
+				sendError(w, http.StatusNotFound, "resource_not_found", dockerengine.PublicError(err))
+			case errors.Is(err, dockerengine.ErrProtocol):
+				sendError(w, http.StatusBadRequest, "invalid_docker_request", dockerengine.PublicError(err))
+			default:
+				sendError(w, http.StatusServiceUnavailable, "docker_unavailable", dockerengine.PublicError(err))
+			}
+			return
+		}
+		sendJSON(w, map[string]any{
+			"agent_id": agentID, "resource_id": id,
+			"observed_at": snapshot.ObservedAt, "complete": snapshot.Complete,
+			"containers": snapshot.Containers,
+		})
+	})))
 	mux.Handle("/v1/docker/resources/{resource_id}/logs", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
 			return
