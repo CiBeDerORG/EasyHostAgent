@@ -3,7 +3,7 @@
 package host
 
 import (
-		"context"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-		"strings"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
