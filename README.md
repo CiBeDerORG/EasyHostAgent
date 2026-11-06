@@ -1,5 +1,26 @@
 # EasyHostAgent
 
+## macOS 原生第一阶段（开发分支）
+
+`feat/macos-native-phase1-20261106` 已新增 **darwin/arm64** 原生程序构建、`macos` 平台检测、macOS CPU/内存/磁盘信息和现有 HTTPS 身份/一次性配对。GitHub Actions `macos-latest` 原生 Runner 验证了启动、HTTPS、配对与已授权的 `/v1/host` 快照，并发布 [macOS 第一阶段开发版](https://github.com/CiBeDerORG/EasyHostAgent/releases/tag/v0.1.0-macos-phase1.dev)（二进制 `easyhostagent-darwin-arm64` 与同名 SHA-256）。此开发版资产可能覆盖更新，请仅在可信测试环境使用。
+
+macOS 服务应由 **当前 GUI 登录用户的 LaunchAgent** 运行，安装入口在 [deploy 的 macOS Agent 分支](https://github.com/CiBeDerORG/deploy/tree/feat/macos-easyhostagent-phase1-20261106)：
+
+```bash
+# 先按 deploy/docs/macos-deploy.md 准备 /opt/software 与统一配置
+bash deploy.sh easyhostagent install
+bash deploy.sh easyhostagent identity
+bash deploy.sh easyhostagent pairing
+bash deploy.sh easyhostagent status
+bash deploy.sh easyhostagent update
+bash deploy.sh easyhostagent uninstall
+```
+
+默认数据目录为 `~/Library/Application Support/EasyHostAgent`，软件根目录 `/opt/software`，HTTPS 默认监听 `0.0.0.0:7018`（具体以 deploy 统一配置为准）。`EASYHOSTAGENT_PLATFORM=macos` 只能用于 macOS 原生进程；用户退出登录后 LaunchAgent 不保证持续运行。仅限可信网络访问，公网禁止暴露配对和管理端口。
+
+**边界：** 第一阶段在 macOS 上明确禁用了 Docker Engine 和应用商店操作接口，也不支持远程 Agent 自更新；它们属于第二、第三阶段。Linux / fnOS 的 systemd 与 Docker 管理功能保持不变。Mac 的原生程序尚未通过你的 Mac mini 实机部署验收。
+
+
 EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机代理。**EasyNetTopo V1.0 是首个正式对接控制端**；一台 Agent 同时只允许一个有效控制端授权，成功重新配对会撤销旧授权。Agent 不依赖 EasyTier 组网，可通过直接可达的 IP:port + HTTPS 管理，也可在可信网络显式启用 HTTP。
 
 支持 HTTP/HTTPS 身份配对、Docker/Compose 资源发现和按摘要缓存应用包。主机管理员授权指定应用源后，控制端可安装、卸载并批量查询 Docker 应用。详见本文「Docker 应用商店」。下文 T01/T02 和 M3 章节保留各阶段的开发记录。
