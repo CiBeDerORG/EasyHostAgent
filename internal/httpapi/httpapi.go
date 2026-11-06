@@ -92,7 +92,7 @@ func NewHandlerWithDockerTasksTransport(state identity.State, platform, version 
 			registerHost(mux, state.AgentID, store, service, apps)
 		}
 		if engine != nil {
-			registerDocker(mux, state.AgentID, store, engine)
+			registerDocker(mux, state.AgentID, store, engine, dockerTasks != nil)
 		}
 		if dockerTasks != nil {
 			registerDockerTasks(mux, state.AgentID, store, dockerTasks)

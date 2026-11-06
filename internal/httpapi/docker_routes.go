@@ -11,7 +11,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
-func registerDocker(mux *http.ServeMux, agentID string, store *pairing.Store, engine *dockerengine.Client) {
+func registerDocker(mux *http.ServeMux, agentID string, store *pairing.Store, engine *dockerengine.Client, actionsSupported bool) {
 	mux.Handle("/v1/docker/inventory", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
 			return
@@ -27,6 +27,7 @@ func registerDocker(mux *http.ServeMux, agentID string, store *pairing.Store, en
 			"agent_id": agentID, "observed_at": snapshot.ObservedAt,
 			"complete": err == nil && snapshot.Complete,
 			"status":   "ok", "resources": resources,
+			"actions_supported": actionsSupported,
 		}
 		if err != nil {
 			payload["status"] = "error"
