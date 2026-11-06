@@ -304,7 +304,8 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 		if !slices.Contains(m.Compatibility.Platforms, s.platform) || !slices.Contains(m.Compatibility.Architectures, runtime.GOARCH) {
 			return Record{}, errors.New("应用未声明支持本机系统或架构")
 		}
-		if m.Runtime.RequiresRoot && os.Geteuid() != 0 {
+		// Linux/fnOS 使用 root Docker Socket；macOS Docker Desktop 由当前登录用户提供本地 Socket。
+		if m.Runtime.RequiresRoot && s.platform != "macos" && os.Geteuid() != 0 {
 			return Record{}, errors.New("此应用要求 Agent 以 root 身份运行")
 		}
 	}
@@ -422,12 +423,31 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	return rec, nil
 }
 
+func scriptEnvironment(platform string) []string {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = os.Getenv("HOME")
+	}
+	path := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	env := []string{"PATH=" + path, "HOME=" + home, "EASYHOSTAGENT_PLATFORM=" + platform}
+	if platform == "macos" {
+		paths := []string{filepath.Join(home, ".docker", "bin"), "/opt/homebrew/bin",
+			"/usr/local/bin", "/Applications/Docker.app/Contents/Resources/bin", path}
+		path = strings.Join(paths, ":")
+		env[0] = "PATH=" + path
+		if socket, err := dockerengine.SocketPathForPlatform(platform); err == nil {
+			env = append(env, "DOCKER_HOST=unix://"+socket)
+		}
+	}
+	return env
+}
+
 func (s *Service) run(rec Record, m manifest, root, work string, values map[string]string, authorized func() bool) {
 	defer s.jobs.Done()
 	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Minute)
 	defer cancel()
 	a := m.Actions[rec.Action]
-	env := []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME=" + os.Getenv("HOME")}
+	env := scriptEnvironment(s.platform)
 	var cmd *exec.Cmd
 	if rec.Mode == legacyDeployMode || rec.Mode == directDeployMode {
 		// Execute only the fixed, locally approved original Deploy script.
