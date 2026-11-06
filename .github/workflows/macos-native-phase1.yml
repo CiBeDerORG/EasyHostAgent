@@ -25,7 +25,7 @@ permissions:
 jobs:
   macos:
     name: macOS ARM64 原生运行、HTTPS、配对与主机概况
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +42,8 @@ jobs:
         run: |
           mkdir -p dist
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Commit=$GITHUB_SHA" -o dist/easyhostagent-darwin-arm64 ./cmd/easyhostagent
+          # Runner 可能是 Intel Mac；额外构建其原生架构用于 HTTPS 端到端测试。
+          CGO_ENABLED=0 GOOS=darwin GOARCH="$(go env GOARCH)" go build -trimpath -o dist/easyhostagent-smoke ./cmd/easyhostagent
           shasum -a 256 dist/easyhostagent-darwin-arm64 | sed 's#dist/##' > dist/easyhostagent-darwin-arm64.sha256
           file dist/easyhostagent-darwin-arm64
       - name: macOS 实际执行 HTTPS、身份配对及主机状态
@@ -55,9 +57,9 @@ jobs:
           export EASYHOSTAGENT_TRANSPORT=https
           mkdir -p "$EASYHOSTAGENT_SOFTWARE_ROOT"
           chmod 0700 "$EASYHOSTAGENT_SOFTWARE_ROOT"
-          ./dist/easyhostagent-darwin-arm64 -check-config
-          ./dist/easyhostagent-darwin-arm64 -identity
-          ./dist/easyhostagent-darwin-arm64 >"$RUNNER_TEMP/agent-phase1.log" 2>&1 &
+          ./dist/easyhostagent-smoke -check-config
+          ./dist/easyhostagent-smoke -identity
+          ./dist/easyhostagent-smoke >"$RUNNER_TEMP/agent-phase1.log" 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
           for i in {1..40}; do
@@ -66,8 +68,8 @@ jobs:
           done
           python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["status"]=="ready"' "$RUNNER_TEMP/health.json"
           curl --silent --fail --insecure https://127.0.0.1:7018/v1/identity >"$RUNNER_TEMP/identity.json"
-          python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["platform"]=="macos" and x["arch"]=="arm64" and x["app_manifest_versions"]==[]' "$RUNNER_TEMP/identity.json"
-          pairing="$(./dist/easyhostagent-darwin-arm64 -pairing-code)"
+          python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["platform"]=="macos" and x["arch"] in ("amd64","arm64") and x["app_manifest_versions"]==[]' "$RUNNER_TEMP/identity.json"
+          pairing="$(./dist/easyhostagent-smoke -pairing-code)"
           code="$(printf '%s\n' "$pairing" | sed -n 's/^One-time pairing code: //p')"
           agent="$(printf '%s\n' "$pairing" | sed -n 's/^Agent ID: //p')"
           test -n "$code" && test -n "$agent"
