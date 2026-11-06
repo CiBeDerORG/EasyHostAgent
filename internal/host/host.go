@@ -225,7 +225,12 @@ func (s *Service) Snapshot(ctx context.Context) (Snapshot, error) {
 			x.Disks = append(x.Disks, Disk{Mount: path, Total: stat.Blocks * uint64(stat.Bsize), Available: stat.Bavail * uint64(stat.Bsize)})
 		}
 	}
-	x.Docker = docker(ctx)
+	if s.platform == "macos" {
+		// 第一阶段不暴露容器 API，避免控制端把 Docker Desktop 探测视为管理能力。
+		x.Docker = Docker{Available: false, ComposeAvailable: false, Error: "macOS 第一阶段尚未开放 Docker 管理"}
+	} else {
+		x.Docker = docker(ctx)
+	}
 	return x, nil
 }
 func docker(ctx context.Context) Docker {
