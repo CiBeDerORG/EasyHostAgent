@@ -45,8 +45,8 @@ func TestMacOSDockerRoutesAreProtectedAndMarketRemainsDisabled(t *testing.T) {
 	}
 	response := call("/v1/identity")
 	var body struct {
-		ManifestVersions []int `json:"app_manifest_versions"`
-		Platform string `json:"platform"`
+		ManifestVersions []int  `json:"app_manifest_versions"`
+		Platform         string `json:"platform"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != http.StatusOK ||
 		body.Platform != "macos" || len(body.ManifestVersions) != 0 {

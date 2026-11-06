@@ -17,11 +17,11 @@ func TestMacOSAgentStartsWithoutDockerDesktop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := Run(ctx, config.Config{
-		DataDir: filepath.Join(t.TempDir(), "state"),
+		DataDir:      filepath.Join(t.TempDir(), "state"),
 		SoftwareRoot: filepath.Join(t.TempDir(), "apps"),
-		ListenAddr: "127.0.0.1:0",
-		Platform: "macos",
-		Transport: "https",
+		ListenAddr:   "127.0.0.1:0",
+		Platform:     "macos",
+		Transport:    "https",
 	}, logging.New(&log, 0))
 	if err != nil || !strings.Contains(log.String(), "agent_start") {
 		t.Fatalf("Docker Desktop 未启动时 Agent 仍应正常运行：%v，日志 %s", err, log.String())
