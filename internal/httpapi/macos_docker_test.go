@@ -13,11 +13,12 @@ import (
 )
 
 func TestMacOSDockerRoutesAreProtectedAndMarketRemainsDisabled(t *testing.T) {
-	state, err := identity.LoadOrCreate(filepath.Join(t.TempDir(), "state"))
+	stateDir := filepath.Join(t.TempDir(), "state")
+	state, err := identity.LoadOrCreate(stateDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := pairing.New(filepath.Join(t.TempDir(), "pairing"), state.AgentID)
+	store, err := pairing.New(stateDir, state.AgentID)
 	if err != nil {
 		t.Fatal(err)
 	}

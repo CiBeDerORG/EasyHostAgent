@@ -18,10 +18,10 @@ type ContainerStats struct {
 
 // ResourceStats 表示单次完整采样；任何运行中容器失败均返回错误，不输出部分结果。
 type ResourceStats struct {
-	ResourceID  string           `json:"resource_id"`
-	ObservedAt  string           `json:"observed_at"`
-	Complete    bool             `json:"complete"`
-	Containers  []ContainerStats `json:"containers"`
+	ResourceID string           `json:"resource_id"`
+	ObservedAt string           `json:"observed_at"`
+	Complete   bool             `json:"complete"`
+	Containers []ContainerStats `json:"containers"`
 }
 
 type engineStats struct {
@@ -31,7 +31,7 @@ type engineStats struct {
 			PercpuUsage []uint64 `json:"percpu_usage"`
 		} `json:"cpu_usage"`
 		SystemUsage uint64 `json:"system_cpu_usage"`
-		OnlineCPUs uint64 `json:"online_cpus"`
+		OnlineCPUs  uint64 `json:"online_cpus"`
 	} `json:"cpu_stats"`
 	PreCPUStats struct {
 		CPUUsage struct {
