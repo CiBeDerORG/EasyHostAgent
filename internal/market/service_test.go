@@ -308,3 +308,11 @@ func TestMacOSScriptEnvironmentUsesDockerDesktopSocket(t *testing.T) {
 		}
 	}
 }
+
+func TestMacOSForceUpdateIsNotExposed(t *testing.T) {
+	s := &Service{platform: "macos"}
+	if _, err := s.ForceUpdate(context.Background(), testController, Request{}, func() bool { return true }); err == nil ||
+		err.Error() != "macOS 应用市场仅支持安装、更新和卸载" {
+		t.Fatalf("macOS 不应开放强制更新：%v", err)
+	}
+}

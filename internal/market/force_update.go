@@ -174,6 +174,9 @@ func (s *Service) restoreLegacyScripts(app string, info bundles.CandidateInfo, f
 // 强制更新仅处理 Compose 身份与原 Deploy 目录完全匹配的已有应用，拒绝同名外部容器。
 // 对已受管项目，强制更新依然走完整的更新校验与已授权脚本，不绕过身份和来源检查。
 func (s *Service) ForceUpdate(ctx context.Context, controller string, req Request, authorized func() bool) (Record, error) {
+	if s.platform == "macos" {
+		return Record{}, errors.New("macOS 应用市场仅支持安装、更新和卸载")
+	}
 	if !req.ConfirmExternal || !req.Ref.valid() || !bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {
 		return Record{}, errors.New("强制更新需要明确确认及有效的固定版本安装包")
 	}
