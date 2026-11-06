@@ -35,10 +35,17 @@ jobs:
           test -z "$(gofmt -l cmd internal)"
           go vet ./...
           go test ./...
-      - name: 构建 macOS ARM64
+      - name: 构建 macOS ARM64 并生成 SHA-256 校验文件
         run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o /tmp/easyhostagent-macos-phase2 ./cmd/easyhostagent
-          file /tmp/easyhostagent-macos-phase2
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/easyhostagent-darwin-arm64 ./cmd/easyhostagent
+          shasum -a 256 dist/easyhostagent-darwin-arm64 | sed 's#dist/##' > dist/easyhostagent-darwin-arm64.sha256
+          file dist/easyhostagent-darwin-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easyhostagent-darwin-arm64-phase2
+          path: dist/easyhostagent-darwin-arm64*
+          retention-days: 14
   linux-regression:
     name: Linux 原有接口回归
     runs-on: ubuntu-latest
@@ -52,3 +59,27 @@ jobs:
       - run: |
           test -z "$(gofmt -l cmd internal)"
           go test ./...
+
+  release:
+    name: 发布 macOS 第二阶段开发版
+    if: github.event_name == 'push'
+    needs: [native-macos, linux-regression]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: easyhostagent-darwin-arm64-phase2
+          path: dist
+      - name: 更新第二阶段开发版 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=v0.1.0-macos-phase2.dev
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "EasyHostAgent macOS Docker 第二阶段开发版" --prerelease --notes "darwin/arm64 原生 Agent；Docker Desktop 本地 Socket、资源清单、日志、CPU/内存统计及容器/Compose 启停重启持久任务。macOS 应用商店安装仍未开放。"
+          fi
+          gh release upload "$tag" dist/easyhostagent-darwin-arm64 dist/easyhostagent-darwin-arm64.sha256 --clobber
