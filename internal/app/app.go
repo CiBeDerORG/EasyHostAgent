@@ -43,17 +43,16 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("load host settings: %w", err)
 	}
-	// 第一阶段的 macOS Agent 仅开放身份、配对与主机概况。
-	// 不构造 Docker/应用执行器，防止在未经适配的平台上误执行 Linux 脚本。
-	var engine *dockerengine.Client
+	// macOS 使用当前登录用户的 Docker Desktop Socket，未启动时也不阻止 Agent 运行。
+	// 应用执行器仍仅在 Linux/fnOS 开放，避免在 Mac 上执行尚未适配的脚本。
+	engine, err := dockerengine.NewForPlatform(cfg.Platform)
+	if err != nil {
+		return fmt.Errorf("初始化本机 Docker Engine: %w", err)
+	}
+	defer engine.Close()
 	var bundleStore *bundles.Store
 	var apps *market.Service
 	if cfg.Platform != "macos" {
-		engine, err = dockerengine.New("")
-		if err != nil {
-			return fmt.Errorf("initialize local Docker Engine: %w", err)
-		}
-		defer engine.Close()
 		bundleStore, err = bundles.New(cfg.DataDir)
 		if err != nil {
 			return fmt.Errorf("initialize immutable bundle cache: %w", err)

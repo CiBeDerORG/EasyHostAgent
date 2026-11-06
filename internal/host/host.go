@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 )
 
 var (
@@ -225,19 +227,19 @@ func (s *Service) Snapshot(ctx context.Context) (Snapshot, error) {
 			x.Disks = append(x.Disks, Disk{Mount: path, Total: stat.Blocks * uint64(stat.Bsize), Available: stat.Bavail * uint64(stat.Bsize)})
 		}
 	}
-	if s.platform == "macos" {
-		// 第一阶段不暴露容器 API，避免控制端把 Docker Desktop 探测视为管理能力。
-		x.Docker = Docker{Available: false, ComposeAvailable: false, Error: "macOS 第一阶段尚未开放 Docker 管理"}
-	} else {
-		x.Docker = docker(ctx)
-	}
+	x.Docker = docker(ctx, s.platform)
 	return x, nil
 }
-func docker(ctx context.Context) Docker {
+func docker(ctx context.Context, platform string) Docker {
 	result := Docker{Available: false, ComposeAvailable: false}
-	// Docker's Unix socket is accessed locally, never via an untrusted DOCKER_HOST.
-	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", "/var/run/docker.sock")
+	// 只连接本机 Unix Socket；不接受环境变量 DOCKER_HOST 或远程 TCP 地址。
+	socket, err := dockerengine.SocketPathForPlatform(platform)
+	if err != nil {
+		result.Error = "Docker Engine unavailable"
+		return result
+	}
+	transport := &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", socket)
 	}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 3 * time.Second}
@@ -264,12 +266,33 @@ func docker(ctx context.Context) Docker {
 	}
 	result.Available = true
 	result.EngineVersion = info.Version
-	if _, e := exec.LookPath("docker"); e != nil {
+	// LaunchAgent 的 PATH 常常不含 Docker Desktop 用户 CLI 路径。
+	// 优先使用 Mac 预期的本地可执行文件，避免误用 Docker context 或远程 Engine。
+	binary := ""
+	if platform == "macos" {
+		home, homeErr := os.UserHomeDir()
+		if homeErr == nil {
+			for _, candidate := range []string{
+				filepath.Join(home, ".docker", "bin", "docker"),
+				"/Applications/Docker.app/Contents/Resources/bin/docker",
+			} {
+				info, statErr := os.Stat(candidate)
+				if statErr == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+					binary = candidate
+					break
+				}
+			}
+		}
+	}
+	if binary == "" {
+		binary, _ = exec.LookPath("docker")
+	}
+	if binary == "" {
 		return result
 	}
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	out, e := exec.CommandContext(cctx, "docker", "compose", "version", "--short").Output()
+	out, e := exec.CommandContext(cctx, binary, "compose", "version", "--short").Output()
 	if e == nil {
 		result.ComposeAvailable = true
 		result.ComposeVersion = strings.TrimSpace(string(out))
