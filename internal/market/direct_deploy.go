@@ -16,13 +16,16 @@ import (
 
 const directDeployMode = "deploy_direct"
 
-// 标准 Deploy 清单必须明确使用固定目录与三个受控脚本。
+// 标准 Deploy 清单使用固定目录与受控脚本；v2 允许不声明更新能力。
 func deployLayout(m manifest) bool {
 	if m.Runtime.Kind != "docker_compose" || m.Runtime.File != "deploy/docker-compose.yaml" || m.Runtime.Project != m.ID {
 		return false
 	}
 	for _, name := range []string{"install", "update", "uninstall"} {
-		a := m.Actions[name]
+		a, exists := m.Actions[name]
+		if m.Version == 2 && name == "update" && !exists {
+			continue
+		}
 		if a.Strategy != "script" || a.Path != "deploy/"+name+".sh" || len(a.Argv) != 0 {
 			return false
 		}
@@ -97,7 +100,7 @@ func materializeDeploy(softwareRoot, platform string, info bundles.CandidateInfo
 			if !ok || !trustedPathOwner(target, softwareRoot, platform, owner.Uid) {
 				return errors.New("已有部署文件所有者不可信")
 			}
-			if strings.HasPrefix(destination, "deploy/lib/") ||
+			if (strings.HasPrefix(destination, "deploy/lib/") && destination != "deploy/lib/app-config.sh") ||
 				strings.HasPrefix(destination, info.ApplicationID+"/config/") {
 				continue
 			}
@@ -154,8 +157,8 @@ func (s *Service) startDirectDeploy(ctx context.Context, req Request, name strin
 		return Record{}, err
 	}
 	var values map[string]string
-	if name == "install" {
-		values, err = prepareConfig(softwareRoot, s.platform, m.Config, req.Config, true)
+	if name == "install" || (name == "update" && m.Version == 2) {
+		values, err = prepareManifestConfig(softwareRoot, s.platform, m, req.Config, true)
 		if err != nil {
 			return Record{}, err
 		}

@@ -65,8 +65,9 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 		sendJSON(w, map[string]any{
 			"protocol_version": 1, "agent_id": state.AgentID, "hostname": host,
 			"platform": platform, "arch": arch, "version": version,
-			"tls_spki_sha256": state.SPKISHA256,
-			"observed_at":     time.Now().UTC().Format(time.RFC3339),
+			"app_manifest_versions": []int{1, 2},
+			"tls_spki_sha256":       state.SPKISHA256,
+			"observed_at":           time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 	// A nil store is allowed for T01-03 legacy discovery tests only.

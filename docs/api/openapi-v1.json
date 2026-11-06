@@ -1554,6 +1554,17 @@
             "type": "string",
             "description": "RFC3339 UTC timestamp.",
             "format": "date-time"
+          },
+          "app_manifest_versions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "enum": [
+                1,
+                2
+              ]
+            },
+            "description": "支持的应用清单版本；旧 Agent 缺少此字段时仅按 v1 处理。"
           }
         },
         "required": [

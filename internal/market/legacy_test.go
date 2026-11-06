@@ -18,7 +18,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 )
 
-func legacyBundle(t *testing.T, store *bundles.Store, app string) string {
+func legacyBundle(t *testing.T, store *bundles.Store, app string, versions ...int) string {
 	t.Helper()
 	manifest := fmt.Sprintf(`id: %s
 runtime: {kind: docker_compose, compose_project: %s, compose_file: deploy/docker-compose.yaml}
@@ -30,6 +30,10 @@ actions:
 data: {default_retain: true}
 verification: {required_services: [api]}
 `, app, app)
+	v2 := len(versions) > 0 && versions[0] == 2
+	if v2 {
+		manifest += "schema_version: 2\nconfiguration: {config: config.yaml, secrets: secrets.yaml}\n"
+	}
 	sha := func(v []byte) string { return fmt.Sprintf("%x", sha256.Sum256(v)) }
 	info := bundles.CandidateInfo{
 		FormatVersion: 1, SourceID: testSource, ApplicationID: app,
@@ -59,8 +63,19 @@ verification: {required_services: [api]}
 	}
 	write(app+"/app.yaml", manifest, "0644")
 	write(app+"/deploy/docker-compose.yaml", "services: {api: {image: example}}\n", "0644")
+	if v2 {
+		write(app+"/config.yaml", "fields:\n- {key: APP_PORT, label: 端口, description: 测试端口, type: port, required: true, custom_input: false, default: 8123}\n", "0644")
+		write(app+"/secrets.yaml", "fields:\n- {key: APP_SECRET, label: 密钥, description: 测试密钥, type: secret, required: false, custom_input: true, default: ''}\n", "0644")
+		write(app+"/deploy/config.env.example", "APP_PORT=\"8123\"\n", "0644")
+		write(app+"/deploy/config.secrets.example", "APP_SECRET=\"\"\n", "0644")
+	}
 	for _, action := range []string{"install", "update", "uninstall"} {
-		write(app+"/deploy/"+action+".sh", "echo ok\n", "0755")
+		body := "echo ok\n"
+		if v2 {
+			// 模拟生命周期脚本，实际检查 Agent 是否在执行前准备好应用配置。
+			body = "test -f ../config/.env && test -f ../config/.secrets\n"
+		}
+		write(app+"/deploy/"+action+".sh", body, "0755")
 	}
 	// 用于验证新增应用的辅助文件由清单驱动修复，不依赖应用 ID 白名单。
 	write(app+"/deploy/custom-migrate.sh", "echo migrate\n", "0755")

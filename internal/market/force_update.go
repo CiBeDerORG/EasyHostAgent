@@ -253,6 +253,15 @@ func (s *Service) forceUpdateLegacy(ctx context.Context, controller string, req 
 	if err := s.restoreLegacyScripts(req.App, info, files); err != nil {
 		return Record{}, err
 	}
+	if m.Version == 2 {
+		root := filepath.Dir(s.root)
+		if err := materializeDeploy(root, s.platform, info, files); err != nil {
+			return Record{}, err
+		}
+		if _, err := prepareManifestConfig(root, s.platform, m, nil, true); err != nil {
+			return Record{}, err
+		}
+	}
 	if !authorized() {
 		return Record{}, ErrDenied
 	}

@@ -312,8 +312,7 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 		if name == "install" && len(req.Config) != 0 {
 			return Record{}, errors.New("原有 Deploy 安装使用现有配置，不允许通过商店覆盖参数")
 		}
-		// Original Deploy installation keeps its own paths, data and secrets.
-		// Do not materialize a separate Agent package over an existing app.
+		// 保留原 Deploy 的路径和数据；v2 更新只同步受控文件并迁移缺失配置。
 		if name == "install" && old.Managed {
 			return Record{}, errors.New("原有 Deploy 应用已安装，请使用更新")
 		}
@@ -344,6 +343,15 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 		if !authorized() {
 			return Record{}, ErrDenied
 		}
+		if name == "update" && m.Version == 2 {
+			root := filepath.Dir(s.root)
+			if err := materializeDeploy(root, s.platform, info, files); err != nil {
+				return Record{}, err
+			}
+			if _, err := prepareManifestConfig(root, s.platform, m, nil, true); err != nil {
+				return Record{}, err
+			}
+		}
 		rec := Record{Ref: req.Ref, Digest: req.Digest, Action: name,
 			Result: "running", Managed: true, Mode: legacyDeployMode,
 			Services: m.Verification.Services}
@@ -356,7 +364,7 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 			s.legacyWorkdir(req.App), nil, authorized)
 		return rec, nil
 	}
-	// 标准 Deploy 清单直接使用 <SOFTWARE_ROOT>/<应用ID>/deploy 和共享配置。
+	// 标准 Deploy 清单直接使用 <SOFTWARE_ROOT>/<应用ID>/deploy，配置路径由清单版本决定。
 	// 非标准历史候选包继续保留原来的隔离安装路径，避免破坏已有记录。
 	if old.Mode == directDeployMode || (!old.Managed && deployLayout(m)) {
 		return s.startDirectDeploy(ctx, req, name, old, m, info, files, authorized)

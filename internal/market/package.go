@@ -30,19 +30,24 @@ type action struct {
 }
 
 type field struct {
-	Key, Type, Target string
-	Required          bool
-	Editable          *bool
-	Default           *string
-	Minimum, Maximum  *int
-	MinLength         *int `yaml:"min_length"`
-	MaxLength         *int `yaml:"max_length"`
-	Pattern           string
+	Key, Type, Target  string
+	Label, Description string
+	CustomInput        *bool `yaml:"custom_input"`
+	GeneratedByScript  bool  `yaml:"generated_by_script"`
+	Required           bool
+	Editable           *bool
+	Default            *string
+	Minimum, Maximum   *int
+	MinLength          *int `yaml:"min_length"`
+	MaxLength          *int `yaml:"max_length"`
+	Pattern            string
 }
 
 type manifest struct {
-	ID      string
-	Runtime struct {
+	Version       int `yaml:"schema_version"`
+	Configuration struct{ Config, Secrets string }
+	ID            string
+	Runtime       struct {
 		Kind         string
 		Project      string `yaml:"compose_project"`
 		File         string `yaml:"compose_file"`
@@ -66,6 +71,9 @@ func loadManifest(info bundles.CandidateInfo, files map[string][]byte) (manifest
 	if err != nil || m.ID != id || m.Runtime.Kind != "docker_compose" || m.Runtime.Project != id ||
 		files[id+"/"+m.Runtime.File] == nil || !m.Data.Retain || len(m.Verification.Services) == 0 {
 		return m, errors.New("应用的 Compose 清单无效")
+	}
+	if err := resolveManifestFields(&m, files); err != nil {
+		return m, err
 	}
 	for _, name := range []string{"install", "update", "uninstall"} {
 		a, exists := m.Actions[name]
@@ -92,6 +100,9 @@ func loadManifest(info bundles.CandidateInfo, files map[string][]byte) (manifest
 		if !found {
 			return m, errors.New("动作脚本未列入可执行包文件")
 		}
+	}
+	if m.Version == 2 && !deployLayout(m) {
+		return m, errors.New("v2 应用必须使用标准 Deploy 生命周期路径")
 	}
 	return m, nil
 }
@@ -358,6 +369,20 @@ func readConfig(path string) (*configFile, error) {
 
 func prepareConfig(root, platform string, fields []field, input map[string]string, update bool) (map[string]string, error) {
 	dir := filepath.Join(root, "deploy")
+	return prepareConfigAt(root, dir, "", platform, fields, input, update)
+}
+
+func prepareManifestConfig(root, platform string, m manifest, input map[string]string, write bool) (map[string]string, error) {
+	if m.Version != 2 {
+		return prepareConfig(root, platform, m.Config, input, write)
+	}
+	if !appID.MatchString(m.ID) {
+		return nil, errors.New("应用 ID 无效")
+	}
+	return prepareConfigAt(root, filepath.Join(root, m.ID, "config"), filepath.Join(root, "deploy"), platform, m.Config, input, write)
+}
+
+func prepareConfigAt(root, dir, legacyDir, platform string, fields []field, input map[string]string, update bool) (map[string]string, error) {
 	if err := trustedManagedDir(dir, root, platform); err != nil {
 		return nil, err
 	}
@@ -368,6 +393,32 @@ func prepareConfig(root, platform string, fields []field, input map[string]strin
 			return nil, err
 		}
 		configs[target] = c
+	}
+	// 仅迁入本应用声明的缺失项；显式空值也属于现有配置，旧文件不删除。
+	if legacyDir != "" {
+		if err := trustedManagedDir(legacyDir, root, platform); err != nil {
+			return nil, err
+		}
+		for _, target := range []string{"env", "secrets"} {
+			old, err := readConfig(filepath.Join(legacyDir, "."+target))
+			if err != nil {
+				return nil, err
+			}
+			for _, f := range fields {
+				if f.Target != target {
+					continue
+				}
+				c := configs[target]
+				if _, exists := c.values[f.Key]; exists {
+					continue
+				}
+				if value, exists := old.values[f.Key]; exists {
+					c.values[f.Key] = value
+					c.index[f.Key] = len(c.lines)
+					c.lines = append(c.lines, f.Key+"=\""+value+"\"")
+				}
+			}
+		}
 	}
 	values := map[string]string{}
 	for _, f := range fields {
@@ -380,6 +431,9 @@ func prepareConfig(root, platform string, fields []field, input map[string]strin
 		}
 		v, stored := c.values[f.Key]
 		in, provided := input[f.Key]
+		if provided && ((f.CustomInput != nil && !*f.CustomInput) || (f.Editable != nil && !*f.Editable)) {
+			return nil, errors.New("配置字段不允许自定义输入")
+		}
 		// Installed credentials are authoritative. Application re-installation
 		// must never replace them, even when the UI submits a different secret.
 		// Explicit credential rotation requires a separate authenticated flow.
@@ -395,7 +449,11 @@ func prepareConfig(root, platform string, fields []field, input map[string]strin
 			}
 		}
 		if update {
-			if err := f.validate(v); err != nil {
+			validationField := f
+			if v == "" && f.GeneratedByScript {
+				validationField.Required = false
+			}
+			if err := validationField.validate(v); err != nil {
 				return nil, err
 			}
 			if !preserveSecret {
