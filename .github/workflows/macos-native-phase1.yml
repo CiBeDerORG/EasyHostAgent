@@ -36,7 +36,7 @@ jobs:
       - name: 格式、静态检查与单元测试
         run: |
           # macOS /var 是 /private/var 的符号链接；测试临时目录必须是可验证的真实路径。
-          export TMPDIR="$RUNNER_TEMP/easyhostagent-test-tmp"
+          export TMPDIR="$HOME/t"
           mkdir -p "$TMPDIR"
           chmod 0700 "$TMPDIR"
           test -z "$(gofmt -l cmd internal)"
@@ -54,6 +54,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export TMPDIR="$HOME/t"
+          mkdir -p "$TMPDIR"
+          chmod 0700 "$TMPDIR"
           export EASYHOSTAGENT_PLATFORM=macos
           export EASYHOSTAGENT_DATA_DIR="$RUNNER_TEMP/agent-phase1-data"
           export EASYHOSTAGENT_SOFTWARE_ROOT="$RUNNER_TEMP/phase1-software"
