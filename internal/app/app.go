@@ -45,7 +45,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("load host settings: %w", err)
 	}
 	// macOS 使用当前登录用户的 Docker Desktop Socket，未启动时也不阻止 Agent 运行。
-	// 应用执行器仍仅在 Linux/fnOS 开放，避免在 Mac 上执行尚未适配的脚本。
+	// 所有平台复用现有应用市场服务；兼容性仍由清单及执行器校验。
 	engine, err := dockerengine.NewForPlatform(cfg.Platform)
 	if err != nil {
 		return fmt.Errorf("初始化本机 Docker Engine: %w", err)
@@ -62,19 +62,17 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	var bundleStore *bundles.Store
 	var apps *market.Service
-	if cfg.Platform != "macos" {
-		bundleStore, err = bundles.New(cfg.DataDir)
-		if err != nil {
-			return fmt.Errorf("initialize immutable bundle cache: %w", err)
-		}
-		jobsCtx, stopJobs := context.WithCancel(ctx)
-		apps, err = market.New(jobsCtx, cfg, os.Getenv("EASYHOSTAGENT_APP_GRANTS"), bundleStore, engine.InspectGrouped)
-		if err != nil {
-			stopJobs()
-			return fmt.Errorf("初始化应用执行器: %w", err)
-		}
-		defer func() { stopJobs(); apps.Wait() }()
+	bundleStore, err = bundles.New(cfg.DataDir)
+	if err != nil {
+		return fmt.Errorf("initialize immutable bundle cache: %w", err)
 	}
+	jobsCtx, stopJobs := context.WithCancel(ctx)
+	apps, err = market.New(jobsCtx, cfg, os.Getenv("EASYHOSTAGENT_APP_GRANTS"), bundleStore, engine.InspectGrouped)
+	if err != nil {
+		stopJobs()
+		return fmt.Errorf("初始化应用执行器: %w", err)
+	}
+	defer func() { stopJobs(); apps.Wait() }()
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("%s listen %q: %w", cfg.Transport, cfg.ListenAddr, err)
