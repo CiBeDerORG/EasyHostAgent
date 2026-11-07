@@ -67,27 +67,3 @@ jobs:
             exit 1
           fi
           go test ./...
-
-  release:
-    name: 发布 macOS 第二阶段开发版
-    if: github.event_name == 'push'
-    needs: [native-macos, linux-regression]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: easyhostagent-darwin-arm64-phase2
-          path: dist
-      - name: 更新第二阶段开发版 Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          tag=v0.1.0-macos-phase2.dev
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --target "$GITHUB_SHA" --title "EasyHostAgent macOS Docker 第二阶段开发版" --prerelease --notes "darwin/arm64 原生 Agent；Docker Desktop 本地 Socket、资源清单、日志、CPU/内存统计及容器/Compose 启停重启持久任务。兼容 Linux 既有应用市场安装、更新、卸载，需 Docker Desktop 与受信任配对控制端。"
-          fi
-          gh release upload "$tag" dist/easyhostagent-darwin-arm64 dist/easyhostagent-darwin-arm64.sha256 --clobber
