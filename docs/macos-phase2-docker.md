@@ -8,18 +8,17 @@
 - 新增 `GET /v1/docker/resources/{resource_id}/stats`：按需读取容器 CPU 百分比、原始内存使用/限制；仅运行中容器采样，Compose 资源合并返回成员数据，失败时不伪造完整结果。
 - `GET /v1/host` 中的 Docker 状态改为真实读取 Docker Desktop Engine 版本；Compose 版本使用登录用户 CLI，兼容 LaunchAgent 的精简 PATH。
 - 即使 Docker Desktop 未安装或未启动，Agent 仍能提供 HTTPS 身份、主机指标与配对。Docker 探测返回不可用，不返回空但“完整”的资源清单。
-- macOS 应用执行器、Bundle 写入与 Linux 脚本继续关闭，`app_manifest_versions: []` 不变。
+- macOS 现已启用与 Linux/fnOS 相同的应用清单、Bundle 与应用市场服务；仅复用已存在的安装、更新、卸载操作。启用后 `app_manifest_versions: [1,2]`，清单仍须明确支持 `macos` 和 `arm64`。
 
 ## 安全边界
 
-Agent 只连接本地 Unix Socket，不使用来自环境的 `DOCKER_HOST`、不暴露远程 Docker TCP 端口。Docker Socket 按 Docker Desktop 当前登录用户访问；不要求 sudo 或系统级 root 守护进程。容器发现与日志受已配对控制端的 Bearer 授权保护。容器 start/stop/restart 的现有 `dockerengine.Act` 内部能力尚未接入持久任务端点，不能绕过审计直接开放同步 HTTP 写操作。
+Agent 只连接本地 Unix Socket，不使用来自环境的 `DOCKER_HOST`、不暴露远程 Docker TCP 端口。Docker Socket 按 Docker Desktop 当前登录用户访问；不要求 sudo 或系统级 root 守护进程。容器发现与日志受已配对控制端的 Bearer 授权保护。现有的容器 start/stop/restart 必须通过带配对授权、落盘记录和任务审计的端点执行。应用市场脚本通过当前用户 Docker Desktop Socket 操作，不提升到 root 权限。
 
-## 未完成
+## 本次范围与验收缺口
 
-- 持久任务框架中的容器/Compose start、stop、restart 适配，以及安全的删除操作；
-- 控制端 CPU/内存统计展示与 Docker Desktop 启停状态呈现；
-- Compose 配置文件部署、重建、拉取与服务变更（现有 Group 仅对已创建容器分组）；
-- EasyNetTopo 前端交互及 Mac mini 实机 Docker Desktop、LaunchAgent 登录会话验收。
+- Linux 应用市场已有安装、更新、卸载通过原有受控脚本使用 Compose，继续遵守既有数据保留和配置校验规则。
+- 不新增独立的容器删除、Compose up/down、镜像拉取或项目重建资源接口，也不新增 Docker 资源抽屉按钮；macOS 不开放强制更新。
+- GitHub CI 的脚本、编译和接口测试不等于 Mac mini 实机验收；Docker Desktop 在线安装/更新/卸载、绑定挂载、重启和卸载保留数据仍需验证。
 
 ## Mac mini 实机验收
 
