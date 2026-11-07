@@ -17,6 +17,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockertasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/httpapi"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
@@ -43,17 +44,30 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("load host settings: %w", err)
 	}
-	engine, err := dockerengine.New("")
+	// macOS 使用当前登录用户的 Docker Desktop Socket，未启动时也不阻止 Agent 运行。
+	// 所有平台复用现有应用市场服务；兼容性仍由清单及执行器校验。
+	engine, err := dockerengine.NewForPlatform(cfg.Platform)
 	if err != nil {
-		return fmt.Errorf("initialize local Docker Engine: %w", err)
+		return fmt.Errorf("初始化本机 Docker Engine: %w", err)
 	}
 	defer engine.Close()
-	bundleStore, err := bundles.New(cfg.DataDir)
+	// 先记录并校验持久任务，macOS 才启用受限的容器生命周期操作。
+	var dockerTasks *dockertasks.Service
+	if cfg.Platform == "macos" {
+		dockerTasks, err = dockertasks.New(cfg.DataDir, state.AgentID, engine)
+		if err != nil {
+			return fmt.Errorf("初始化 Docker 持久任务: %w", err)
+		}
+		defer dockerTasks.Close()
+	}
+	var bundleStore *bundles.Store
+	var apps *market.Service
+	bundleStore, err = bundles.New(cfg.DataDir)
 	if err != nil {
 		return fmt.Errorf("initialize immutable bundle cache: %w", err)
 	}
 	jobsCtx, stopJobs := context.WithCancel(ctx)
-	apps, err := market.New(jobsCtx, cfg, os.Getenv("EASYHOSTAGENT_APP_GRANTS"), bundleStore, engine.InspectGrouped)
+	apps, err = market.New(jobsCtx, cfg, os.Getenv("EASYHOSTAGENT_APP_GRANTS"), bundleStore, engine.InspectGrouped)
 	if err != nil {
 		stopJobs()
 		return fmt.Errorf("初始化应用执行器: %w", err)
@@ -68,7 +82,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Certificates: []tls.Certificate{state.Certificate},
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithMarketTransport(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, apps, cfg.Transport == "http", store),
+		Handler:           httpapi.NewHandlerWithDockerTasksTransport(state, cfg.Platform, buildinfo.Version, hostService, engine, bundleStore, apps, dockerTasks, cfg.Transport == "http", store),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

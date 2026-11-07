@@ -37,7 +37,7 @@ jobs:
           test -z "$(gofmt -l cmd internal)"
           go vet ./...
           go test ./...
-      - name: 构建 Linux 双架构安装文件和 SHA-256
+      - name: 构建 Linux AMD64/ARM64 与 macOS ARM64 安装文件和 SHA-256
         shell: bash
         run: |
           set -euo pipefail
@@ -51,6 +51,14 @@ jobs:
               sha256sum "easyhostagent-linux-$arch" > "easyhostagent-linux-$arch.sha256"
             )
           done
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath \
+            -ldflags "-s -w -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Version=0.1.0-dev -X github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo.Commit=$GITHUB_SHA" \
+            -o dist/easyhostagent-darwin-arm64 ./cmd/easyhostagent
+          (
+            cd dist
+            sha256sum easyhostagent-darwin-arm64 > easyhostagent-darwin-arm64.sha256
+          )
+          file dist/easyhostagent-darwin-arm64
       - name: 更新原生开发版 GitHub Release
         shell: bash
         env:
@@ -63,5 +71,8 @@ jobs:
               --notes "Linux AMD64/ARM64 原生 systemd 安装包，附 SHA-256 校验文件；此开发版标签及资产可更新。" \
               --prerelease
           fi
-          gh release upload "$tag" dist/easyhostagent-linux-amd64 dist/easyhostagent-linux-amd64.sha256 \
-            dist/easyhostagent-linux-arm64 dist/easyhostagent-linux-arm64.sha256 --clobber
+          gh release edit "$tag" --notes "统一原生开发版：Linux AMD64/ARM64 与 macOS Apple Silicon ARM64，所有平台共用同一 Release 标签；每个二进制附 SHA-256 校验文件。此开发版标签及资产可更新。"
+          gh release upload "$tag" \
+            dist/easyhostagent-linux-amd64 dist/easyhostagent-linux-amd64.sha256 \
+            dist/easyhostagent-linux-arm64 dist/easyhostagent-linux-arm64.sha256 \
+            dist/easyhostagent-darwin-arm64 dist/easyhostagent-darwin-arm64.sha256 --clobber

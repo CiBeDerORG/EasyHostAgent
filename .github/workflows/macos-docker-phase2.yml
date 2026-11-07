@@ -1,0 +1,69 @@
+name: EasyHostAgent macOS Docker 第二阶段验证
+
+on:
+  push:
+    branches:
+      - feat/macos-docker-phase2-20261106
+  pull_request:
+    paths:
+      - "internal/**"
+      - "cmd/**"
+      - ".github/workflows/macos-docker-phase2.yml"
+      - "go.mod"
+      - "go.sum"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-macos:
+    name: macOS 原生 Docker Socket 和回归测试
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: macOS 原生测试及静态检查
+        run: |
+          export TMPDIR="$HOME/t"
+          mkdir -p "$TMPDIR"
+          chmod 0700 "$TMPDIR"
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            printf 'Unformatted Go files:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
+          go vet ./...
+          go test ./...
+      - name: 构建 macOS ARM64 并生成 SHA-256 校验文件
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o dist/easyhostagent-darwin-arm64 ./cmd/easyhostagent
+          shasum -a 256 dist/easyhostagent-darwin-arm64 | sed 's#dist/##' > dist/easyhostagent-darwin-arm64.sha256
+          file dist/easyhostagent-darwin-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easyhostagent-darwin-arm64-phase2
+          path: dist/easyhostagent-darwin-arm64*
+          retention-days: 14
+  linux-regression:
+    name: Linux 原有接口回归
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            printf 'Unformatted Go files:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
+          go test ./...

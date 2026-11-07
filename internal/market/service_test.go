@@ -22,11 +22,12 @@ import (
 const testSource = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 const testController = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 
-func cacheFixture(t *testing.T, store *bundles.Store, id string) string {
+func cacheFixture(t *testing.T, store *bundles.Store, id string, requiresRoot ...bool) string {
 	t.Helper()
+	rootRequired := len(requiresRoot) > 0 && requiresRoot[0]
 	manifest := fmt.Sprintf(`id: %s
-runtime: {kind: docker_compose, compose_project: %s, compose_file: deploy/compose.yaml}
-compatibility: {platforms: [linux, fnos], architectures: [amd64, arm64]}
+runtime: {kind: docker_compose, compose_project: %s, compose_file: deploy/compose.yaml, requires_root: %t}
+compatibility: {platforms: [linux, fnos, macos], architectures: [amd64, arm64]}
 actions:
   install: {strategy: script, path: deploy/service.sh, argv: [install]}
   update: {strategy: script, path: deploy/service.sh, argv: [update]}
@@ -36,7 +37,7 @@ config:
   - {key: APP_TOKEN, type: secret, target: secrets, required: false}
 data: {default_retain: true}
 verification: {required_services: [web]}
-`, id, id)
+`, id, id, rootRequired)
 	var buf bytes.Buffer
 	zipper := zip.NewWriter(&buf)
 	put := func(name, body string, mode os.FileMode) {
@@ -238,5 +239,80 @@ func TestTwoAppsLifecycle(t *testing.T) {
 		Ref: refs[0], Digest: cacheFixture(t, cache, refs[0].App),
 	}, granted); err == nil {
 		t.Fatal("未安装的应用不能更新")
+	}
+}
+
+func TestMacOSMarketInstallUpdateUninstall(t *testing.T) {
+	ctx := context.Background()
+	data := filepath.Join(t.TempDir(), "agent")
+	if err := os.Mkdir(data, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cache, err := bundles.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "software")
+	scan := func(context.Context) (dockerengine.GroupedInventory, error) {
+		return dockerengine.GroupedInventory{Complete: true}, nil
+	}
+	s, err := New(ctx, config.Config{DataDir: data, SoftwareRoot: root, Platform: "macos"}, "", cache, scan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{Source: testSource, App: "demo-macos"}
+	digest := cacheFixture(t, cache, ref.App, true)
+	authorized := func() bool { return true }
+
+	if _, err := s.Start(ctx, testController, "install", Request{Ref: ref, Digest: digest}, authorized); err != nil {
+		t.Fatalf("macOS 当前用户不能安装声明 requires_root 的 Docker Desktop 应用：%v", err)
+	}
+	s.Wait()
+	record, err := s.read(ref.App)
+	if err != nil || record.Result != "succeeded" || !record.Managed {
+		t.Fatalf("macOS 安装结果错误：%+v %v", record, err)
+	}
+	if _, err := s.Start(ctx, testController, "update", Request{Ref: ref, Digest: digest}, authorized); err != nil {
+		t.Fatalf("macOS 当前用户不能更新应用：%v", err)
+	}
+	s.Wait()
+	record, err = s.read(ref.App)
+	if err != nil || record.Action != "update" || record.Result != "succeeded" {
+		t.Fatalf("macOS 更新结果错误：%+v %v", record, err)
+	}
+	if _, err := s.Start(ctx, testController, "uninstall", Request{Ref: ref}, authorized); err != nil {
+		t.Fatalf("macOS 当前用户不能卸载应用：%v", err)
+	}
+	s.Wait()
+	record, err = s.read(ref.App)
+	if err != nil || record.Action != "uninstall" || record.Result != "succeeded" || record.Managed {
+		t.Fatalf("macOS 卸载结果错误：%+v %v", record, err)
+	}
+}
+
+func TestMacOSScriptEnvironmentUsesDockerDesktopSocket(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	env := scriptEnvironment("macos")
+	joined := strings.Join(env, "\n")
+	wantSocket := "DOCKER_HOST=unix://" + filepath.Join(home, ".docker", "run", "docker.sock")
+	for _, want := range []string{
+		"EASYHOSTAGENT_PLATFORM=macos",
+		wantSocket,
+		filepath.Join(home, ".docker", "bin"),
+		"/opt/homebrew/bin",
+		"/Applications/Docker.app/Contents/Resources/bin",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("macOS 脚本环境缺少 %q：%s", want, joined)
+		}
+	}
+}
+
+func TestMacOSForceUpdateIsNotExposed(t *testing.T) {
+	s := &Service{platform: "macos"}
+	if _, err := s.ForceUpdate(context.Background(), testController, Request{}, func() bool { return true }); err == nil ||
+		err.Error() != "macOS 应用市场仅支持安装、更新和卸载" {
+		t.Fatalf("macOS 不应开放强制更新：%v", err)
 	}
 }

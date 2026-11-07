@@ -1,0 +1,49 @@
+name: macOS Darwin ARM64 交叉编译
+
+on:
+  push:
+    branches:
+      - feat/macos-native-phase1-20261106
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - ".github/workflows/macos-cross-compile.yml"
+  pull_request:
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - ".github/workflows/macos-cross-compile.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cross-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Linux 全量单元测试
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go test ./...
+      - name: 构建 Darwin ARM64 所有包和二进制
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: |
+          go build ./...
+          mkdir -p dist
+          go build -trimpath -o dist/easyhostagent-darwin-arm64 ./cmd/easyhostagent
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easyhostagent-darwin-arm64-cross
+          path: dist/easyhostagent-darwin-arm64
+          retention-days: 14

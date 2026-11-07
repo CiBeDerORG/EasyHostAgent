@@ -16,6 +16,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockertasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
@@ -46,6 +47,11 @@ func NewHandlerWithMarket(state identity.State, platform, version string, servic
 
 // NewHandlerWithMarketTransport 在显式配置 HTTP 时允许明文传输；默认继续强制 HTTPS。
 func NewHandlerWithMarketTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithDockerTasksTransport(state, platform, version, service, engine, cache, apps, nil, allowHTTP, stores...)
+}
+
+// NewHandlerWithDockerTasksTransport 只在传入已初始化的持久任务服务时开放 Docker 写操作。
+func NewHandlerWithDockerTasksTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, dockerTasks *dockertasks.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -62,10 +68,15 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 		if arch != "amd64" && arch != "arm64" {
 			arch = "other"
 		}
+		manifestVersions := []int{1, 2}
+		if apps == nil {
+			// 未启用应用执行器时不向控制端声明清单能力。
+			manifestVersions = []int{}
+		}
 		sendJSON(w, map[string]any{
 			"protocol_version": 1, "agent_id": state.AgentID, "hostname": host,
 			"platform": platform, "arch": arch, "version": version,
-			"app_manifest_versions": []int{1, 2},
+			"app_manifest_versions": manifestVersions,
 			"tls_spki_sha256":       state.SPKISHA256,
 			"observed_at":           time.Now().UTC().Format(time.RFC3339),
 		})
@@ -81,7 +92,10 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 			registerHost(mux, state.AgentID, store, service, apps)
 		}
 		if engine != nil {
-			registerDocker(mux, state.AgentID, store, engine)
+			registerDocker(mux, state.AgentID, store, engine, dockerTasks != nil)
+		}
+		if dockerTasks != nil {
+			registerDockerTasks(mux, state.AgentID, store, dockerTasks)
 		}
 		if cache != nil {
 			registerBundles(mux, state.AgentID, store, cache)
