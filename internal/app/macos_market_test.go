@@ -58,8 +58,8 @@ func TestMacOSMarketplaceRoutesAvailableWithoutDockerDesktop(t *testing.T) {
 	}
 	base := "https://" + addr
 	var identity struct {
-		Platform string `json:"platform"`
-		Versions []int  `json:"app_manifest_versions"`
+		Platform string	`json:"platform"`
+		Versions []int	`json:"app_manifest_versions"`
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
