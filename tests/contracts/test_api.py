@@ -41,7 +41,9 @@ class ApiContractTests(unittest.TestCase):
                     refs = {p.get("$ref") for p in op.get("parameters", [])}
                     self.assertIn("#/components/parameters/AgentId", refs)
                     self.assertIn("#/components/parameters/ControllerId", refs)
-        self.assertEqual(len(ids), 15)
+        self.assertEqual(len(ids), 18)
+        for action in ("install", "uninstall", "status"):
+            self.assertIn("post", API["paths"]["/v1/apps/" + action])
         self.assertNotIn("/v1/catalog", API["paths"])
 
     def test_documented_json_examples(self):

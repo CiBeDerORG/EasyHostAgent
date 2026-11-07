@@ -301,3 +301,11 @@ GET /v1/tasks/44444444-4444-4444-8444-444444444444/logs?offset=0
 7. **按需访问**：浏览器仅对 EasyNetTopo 同源 API 发起请求，控制端后端负责私有 Git 拉取、用户权限与授权凭据存储，Agent 不连接 Git，也无心跳、自动同步和离线任务队列。
 
 **M0 状态**：本次完成的是机器可读契约、说明与契约测试增量；不是 Go 侧远程任务处理器，也不是完整安全执行机制。其余以前的 EasyTier 业务集成条款保留历史语义，不可直接用于 EasyNetTopo。
+
+## 应用配置 v2（HTTP 协议仍为 v1）
+
+`GET /v1/identity` 增加 `app_manifest_versions: [1, 2]`。控制端在发送 v2 应用包之前检查该能力；旧 Agent 未声明时只按 v1 使用，不升级 HTTP 协议版本或 ZIP 格式版本。
+
+v2 应用在包内携带 `config.yaml`、`secrets.yaml` 及生成的脚本默认值模板。Agent 只从已校验字节读取定义，拒绝重复键、未知字段、无效类型或输入权限。`custom_input:false` 与 `editable:false` 都不允许请求覆盖；`editable` 缺省为 true。真实值写入 `<SOFTWARE_ROOT>/<应用>/config/.env` 和 `.secrets`，旧全局文件仅作为缺失项的迁移来源，已有非空凭据不轮换。安装、更新与旧应用接管后的更新使用同一迁移规则，卸载保留配置和数据。
+
+v1 清单继续使用原全局配置路径。应用配置定义不进入 Agent 自身的启动配置，不增加配置管理页面。跨仓库验证可设置 `DEPLOY_CONTRACT_ROOT` 后运行 `go test ./internal/market`；真实 Docker 生命周期与系统权限仍需目标主机验收。

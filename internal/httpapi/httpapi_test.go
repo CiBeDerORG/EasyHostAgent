@@ -3,6 +3,7 @@ package httpapi
 import (
 	"crypto/tls"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -83,5 +84,25 @@ func TestEndpointMethodsAndPlainHTTPRejected(t *testing.T) {
 		if rr.Code != tt.want {
 			t.Errorf("%s %s: got %d want %d", tt.method, tt.path, rr.Code, tt.want)
 		}
+	}
+}
+
+func TestHTTPMustBeExplicitlyEnabled(t *testing.T) {
+	state, err := identity.LoadOrCreate(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpsOnly := NewHandler(state, "linux", "dev")
+	httpEnabled := NewHandlerWithMarketTransport(state, "linux", "dev", nil, nil, nil, nil, true)
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/v1/identity", nil)
+	denied := httptest.NewRecorder()
+	httpsOnly.ServeHTTP(denied, request)
+	if denied.Code != http.StatusBadRequest {
+		t.Fatalf("默认 HTTPS 模式错误地允许 HTTP: %d", denied.Code)
+	}
+	accepted := httptest.NewRecorder()
+	httpEnabled.ServeHTTP(accepted, request)
+	if accepted.Code != http.StatusOK || accepted.Header().Get("X-EHA-Agent-ID") != state.AgentID {
+		t.Fatalf("显式 HTTP 模式未能读取身份: %d", accepted.Code)
 	}
 }

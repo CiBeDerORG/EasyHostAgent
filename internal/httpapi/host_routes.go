@@ -4,15 +4,42 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
-func registerHost(mux *http.ServeMux, agentID string, store *pairing.Store, service *host.Service) {
+func registerHost(mux *http.ServeMux, agentID string, store *pairing.Store, service *host.Service, apps *market.Service) {
+	mux.Handle("POST /v1/host/maintenance/{action}", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("action") != "update" && r.PathValue("action") != "force-update" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.ContentLength > 0 {
+			sendError(w, 400, "invalid_request", "Maintenance request must not contain a body")
+			return
+		}
+		if apps != nil && apps.Busy() {
+			sendError(w, http.StatusConflict, "app_operation_busy", "An application operation is running; retry after it finishes")
+			return
+		}
+		if err := service.QueueSelfUpdate(r.Context(), r.PathValue("action")); err != nil {
+			// Never echo sensitive environment or command output to clients.
+			// A trusted administrator can inspect the failed preflight path in
+			// journalctl -u easyhostagent without exposing credentials to the UI.
+			slog.Warn("agent_self_update_rejected", "action", r.PathValue("action"), "reason", err.Error())
+			sendError(w, http.StatusServiceUnavailable, "maintenance_unavailable", "Cannot schedule native update; inspect host systemd and Deploy installation")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]string{"state": "queued", "action": r.PathValue("action")})
+	})))
 	mux.Handle("/v1/host", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
 			return

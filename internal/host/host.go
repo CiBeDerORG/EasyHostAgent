@@ -1,9 +1,8 @@
-// Package host provides on-demand, authenticated Linux host inspection and
+// Package host provides on-demand, authenticated cross-platform host inspection and
 // durable software root settings. It intentionally has no polling goroutines.
 package host
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,11 +14,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 )
 
 var (
@@ -30,6 +30,7 @@ var (
 type Service struct {
 	mu                                      sync.Mutex
 	dataDir, defaultRoot, platform, agentID string
+	startedAt                               string
 }
 type Settings struct {
 	SoftwareRoot string `json:"software_root"`
@@ -48,6 +49,7 @@ type Docker struct {
 }
 type Snapshot struct {
 	AgentID    string `json:"agent_id"`
+	StartedAt  string `json:"agent_started_at"`
 	ObservedAt string `json:"observed_at"`
 	Hostname   string `json:"hostname"`
 	Platform   string `json:"platform"`
@@ -68,15 +70,21 @@ func New(dataDir, defaultRoot, platform, agentID string) (*Service, error) {
 	if err := validateRoot(dataDir, defaultRoot); err != nil {
 		return nil, err
 	}
-	s := &Service{dataDir: dataDir, defaultRoot: defaultRoot, platform: platform, agentID: agentID}
+	s := &Service{dataDir: dataDir, defaultRoot: defaultRoot, platform: platform, agentID: agentID,
+		startedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if _, err := s.Root(); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 func validateRoot(dataDir, root string) error {
+	// Agent state may live below SOFTWARE_ROOT (e.g. fnOS:
+	// /vol3/1000/software/easyhostagent/data). Keep it separate from the
+	// managed-app workspace SOFTWARE_ROOT/.easyhostagent-apps.
+	appsRoot := filepath.Join(root, ".easyhostagent-apps")
 	if root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root || root == "/" ||
-		root == dataDir || strings.HasPrefix(root, dataDir+"/") || strings.HasPrefix(dataDir, root+"/") ||
+		root == dataDir || strings.HasPrefix(root, dataDir+"/") ||
+		dataDir == appsRoot || strings.HasPrefix(dataDir, appsRoot+"/") ||
 		strings.ContainsAny(root, "\x00\n\r") {
 		return ErrInvalidRoot
 	}
@@ -186,7 +194,7 @@ func (s *Service) Snapshot(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	hostName, _ := os.Hostname()
-	x := Snapshot{AgentID: s.agentID, ObservedAt: time.Now().UTC().Format(time.RFC3339), Hostname: hostName, Platform: s.platform, Arch: runtime.GOARCH, SoftwareRoot: root, Disks: []Disk{}}
+	x := Snapshot{AgentID: s.agentID, StartedAt: s.startedAt, ObservedAt: time.Now().UTC().Format(time.RFC3339), Hostname: hostName, Platform: s.platform, Arch: runtime.GOARCH, SoftwareRoot: root, Disks: []Disk{}}
 	x.CPU.LogicalCores = runtime.NumCPU()
 	if x.CPU.LogicalCores < 1 {
 		x.CPU.LogicalCores = 1
@@ -219,43 +227,19 @@ func (s *Service) Snapshot(ctx context.Context) (Snapshot, error) {
 			x.Disks = append(x.Disks, Disk{Mount: path, Total: stat.Blocks * uint64(stat.Bsize), Available: stat.Bavail * uint64(stat.Bsize)})
 		}
 	}
-	x.Docker = docker(ctx)
+	x.Docker = docker(ctx, s.platform)
 	return x, nil
 }
-func memory() (total, used uint64) {
-	f, err := os.Open("/proc/meminfo")
-	if err != nil {
-		return 0, 0
-	}
-	defer f.Close()
-	var available uint64
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		if len(fields) < 2 {
-			continue
-		}
-		n, e := strconv.ParseUint(fields[1], 10, 64)
-		if e != nil {
-			continue
-		}
-		switch fields[0] {
-		case "MemTotal:":
-			total = n * 1024
-		case "MemAvailable:":
-			available = n * 1024
-		}
-	}
-	if total >= available {
-		used = total - available
-	}
-	return total, used
-}
-func docker(ctx context.Context) Docker {
+func docker(ctx context.Context, platform string) Docker {
 	result := Docker{Available: false, ComposeAvailable: false}
-	// Docker's Unix socket is accessed locally, never via an untrusted DOCKER_HOST.
-	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", "/var/run/docker.sock")
+	// 只连接本机 Unix Socket；不接受环境变量 DOCKER_HOST 或远程 TCP 地址。
+	socket, err := dockerengine.SocketPathForPlatform(platform)
+	if err != nil {
+		result.Error = "Docker Engine unavailable"
+		return result
+	}
+	transport := &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", socket)
 	}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 3 * time.Second}
@@ -282,12 +266,33 @@ func docker(ctx context.Context) Docker {
 	}
 	result.Available = true
 	result.EngineVersion = info.Version
-	if _, e := exec.LookPath("docker"); e != nil {
+	// LaunchAgent 的 PATH 常常不含 Docker Desktop 用户 CLI 路径。
+	// 优先使用 Mac 预期的本地可执行文件，避免误用 Docker context 或远程 Engine。
+	binary := ""
+	if platform == "macos" {
+		home, homeErr := os.UserHomeDir()
+		if homeErr == nil {
+			for _, candidate := range []string{
+				filepath.Join(home, ".docker", "bin", "docker"),
+				"/Applications/Docker.app/Contents/Resources/bin/docker",
+			} {
+				info, statErr := os.Stat(candidate)
+				if statErr == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+					binary = candidate
+					break
+				}
+			}
+		}
+	}
+	if binary == "" {
+		binary, _ = exec.LookPath("docker")
+	}
+	if binary == "" {
 		return result
 	}
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	out, e := exec.CommandContext(cctx, "docker", "compose", "version", "--short").Output()
+	out, e := exec.CommandContext(cctx, binary, "compose", "version", "--short").Output()
 	if e == nil {
 		result.ComposeAvailable = true
 		result.ComposeVersion = strings.TrimSpace(string(out))

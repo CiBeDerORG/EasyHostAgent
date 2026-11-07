@@ -1,19 +1,48 @@
 # EasyHostAgent
 
-EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机代理。**EasyNetTopo V1.0 是首个正式对接控制端**；一台 Agent 同时只允许一个有效控制端授权，成功重新配对会撤销旧授权。Agent 不依赖 EasyTier 组网，可以通过直接可达的 IP:port + HTTPS 管理。
+## macOS 原生第一阶段（开发分支）
 
-> **当前实际能力（M3-01 分支）**：已实现 TLS 身份发现、一次性配对与控制端 Token、主机资源与 Docker/Compose **只读**查询，以及受授权、固定 SHA-256 的 ZIP Bundle **上传/缓存**。尚未实现 Bundle 执行、持久化应用任务、安装/更新/卸载 API，**不能当作完整的应用执行代理**。下文 T01/T02 等部分阶段说明仍为历史开发记录；实时功能范围以实际 API/测试及 [M3 部署包说明](docs/m3-immutable-bundles.md) 为准。
+`feat/macos-native-phase1-20261106` 已新增 **darwin/arm64** 原生程序构建、`macos` 平台检测、macOS CPU/内存/磁盘信息和现有 HTTPS 身份/一次性配对。GitHub Actions `macos-latest` 原生 Runner 验证了启动、HTTPS、配对与已授权的 `/v1/host` 快照，并发布 [macOS 第一阶段开发版](https://github.com/CiBeDerORG/EasyHostAgent/releases/tag/v0.1.0-macos-phase1.dev)（二进制 `easyhostagent-darwin-arm64` 与同名 SHA-256）。此开发版资产可能覆盖更新，请仅在可信测试环境使用。
+
+macOS 服务应由 **当前 GUI 登录用户的 LaunchAgent** 运行，安装入口在 [deploy 的 macOS Agent 分支](https://github.com/CiBeDerORG/deploy/tree/feat/macos-easyhostagent-phase1-20261106)：
+
+```bash
+# 先按 deploy/docs/macos-deploy.md 准备 /opt/software 与统一配置
+bash deploy.sh easyhostagent install
+bash deploy.sh easyhostagent identity
+bash deploy.sh easyhostagent pairing
+bash deploy.sh easyhostagent status
+bash deploy.sh easyhostagent update
+bash deploy.sh easyhostagent uninstall
+```
+
+默认数据目录为 `~/Library/Application Support/EasyHostAgent`，软件根目录 `/opt/software`，HTTPS 默认监听 `0.0.0.0:7018`（具体以 deploy 统一配置为准）。`EASYHOSTAGENT_PLATFORM=macos` 只能用于 macOS 原生进程；用户退出登录后 LaunchAgent 不保证持续运行。仅限可信网络访问，公网禁止暴露配对和管理端口。
+
+**边界：** 第一阶段在 macOS 上明确禁用了 Docker Engine 和应用商店操作接口，也不支持远程 Agent 自更新；它们属于第二、第三阶段。Linux / fnOS 的 systemd 与 Docker 管理功能保持不变。Mac 的原生程序尚未通过你的 Mac mini 实机部署验收。
+
+
+EasyHostAgent 是面向受授权管理控制端的 Go 原生 Linux / FnOS 主机代理。**EasyNetTopo V1.0 是首个正式对接控制端**；一台 Agent 同时只允许一个有效控制端授权，成功重新配对会撤销旧授权。Agent 不依赖 EasyTier 组网，可通过直接可达的 IP:port + HTTPS 管理，也可在可信网络显式启用 HTTP。
+
+支持 HTTP/HTTPS 身份配对、Docker/Compose 资源发现和按摘要缓存应用包。主机管理员授权指定应用源后，控制端可安装、卸载并批量查询 Docker 应用。详见本文「Docker 应用商店」。下文 T01/T02 和 M3 章节保留各阶段的开发记录。
+
+## 推荐部署：GitHub Actions → GHCR → deploy
+
+EasyHostAgent 的默认集成部署方式现为 **Docker Compose 单容器**，GitHub Actions 自动构建并发布 AMD64/ARM64 镜像 `ghcr.io/cibederorg/easyhostagent:feat-docker-app-store`。安装端不编译 Go、不下载二进制 Release。完整配置、安装、更新与卸载命令见 [deploy 的 EasyHostAgent 指南](https://github.com/CiBeDerORG/deploy/blob/feat/docker-app-store/easyhostagent/README.md)。
+
+该镜像基于官方 Docker CLI 运行时（包含 `docker compose`），需要挂载宿主机 `/var/run/docker.sock` 和相同绝对路径的软件根目录，因此具有**宿主机 Docker 管理权限**。容器以 root 运行；建议仅在可信网络使用，默认 HTTPS、可配置 HTTP，不发送心跳。容器内根据 `EASYHOSTAGENT_PLATFORM=fnos|linux` 保持目标主机的平台标识，避免将 fnOS 误识别成镜像自身的 Alpine Linux。
+
+下方原生 systemd 安装器保留用于独立使用；`deploy.sh easyhostagent` 已不再走原生安装器。开发版二进制 Release 的自动发布流程已经停用，推荐使用 GHCR 镜像。
 
 ## 工程结构
 
 ```text
 cmd/easyhostagent/       CLI 入口（-version、-check-config、-identity、-pairing-code）
-internal/app/            TLS 1.3 服务生命周期与优雅退出
+internal/app/            HTTP / TLS 1.3 HTTPS 服务生命周期与优雅退出
 internal/config/         软件根目录、状态目录、日志等级
 internal/logging/        标准库 log/slog JSON 结构化日志
 internal/buildinfo/      构建版本元数据
 internal/identity/       私有身份状态文件、Agent UUID、TLS 证书与指纹
-internal/httpapi/        HTTPS health / identity / pairings API
+internal/httpapi/        HTTP/HTTPS health / identity / pairings 与应用操作 API
 internal/auth/           Bearer + Controller/Agent ID 鉴权中间件
 internal/pairing/        一次性配对窗口与持久授权仓库
 docs/                    架构与协议文档
@@ -141,13 +170,24 @@ HTTP 配对契约：
 | `EASYHOSTAGENT_SOFTWARE_ROOT` | `/opt/software` | `/vol3/1000/software` |
 | `EASYHOSTAGENT_LOG_LEVEL` | `info` | `info` |
 | `EASYHOSTAGENT_LISTEN_ADDRESS` | `0.0.0.0:7014` | `0.0.0.0:7014` |
+| `EASYHOSTAGENT_TRANSPORT` | `https` | `https` |
 
 FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-release` 进行保守的识别；用户可使用 `EASYHOSTAGENT_SOFTWARE_ROOT` 明确覆盖。后续 T01-07 负责完善 FnOS 兼容与 UI 可配置路径，以及存在受管应用时禁止直接迁移目录的业务规则。
+
+**HTTP 模式（可选）**：在 `/etc/easyhostagent/agent.env` 设置 `EASYHOSTAGENT_TRANSPORT=http` 和 `EASYHOSTAGENT_LISTEN_ADDRESS=0.0.0.0:7014`（或可信网卡的具体 IP），随后重启 `easyhostagent.service`。EasyNetTopo 中登记 `http://<Agent-IP>:7014`；不写协议的旧格式 `IP:7014` 仍默认为 HTTPS。HTTP 使用与 HTTPS 相同的配对码、Bearer Token、来源授权和安装/卸载/状态接口，但**没有传输加密，登录令牌、安装参数及返回信息可能被旁路读取或篡改**，只能用于可信隔离网络，禁止直接暴露公网；强烈建议使用 HTTPS。服务不会主动发送心跳，不会定时轮询控制端。
 
 配置校验仅读取参数，不会创建目录、修改文件或运行 Docker。身份命令首次调用时会写入本地受保护的状态；配对码仅经本地 CLI 显示。日志使用 JSON Lines，标准输出由 systemd/journald 收集。
 
 ## 历史计划说明
 
-此前依据 EasyTier 集成路线编写的需求计划和任务计划已经撤销，不再作为当前开发依据。项目实际能力与实现边界以当前 `main` 的 Go 源码、API 和已保留的 M3 技术文档为准；新的 Docker 应用安装、卸载与状态查询需求须重新确认后建档。
+此前依据 EasyTier 集成路线编写的需求计划和任务计划已经撤销。M3 文档记录了安装包缓存阶段，当前商店操作见下节。
 
-本项目不采用心跳，不由 Agent 克隆私有 Deploy 仓库，不实现自动回滚。失败保留现场和日志。
+应用源由 EasyNetTopo 拉取，Agent 按需执行并保留失败现场。
+
+## Docker 应用商店
+
+配对后，管理员从 EasyNetTopo 页面核对控制端 ID 和 Git 来源 ID，在主机的 `/etc/easyhostagent/agent.env` 设置 `EASYHOSTAGENT_APP_GRANTS=<控制端UUID>/<来源UUID>`，然后重启 Agent。多个授权用逗号分隔。移除授权并重启即停止接受该来源的新操作。未设置时仍可查询状态。授权意味着信任该控制端为指定来源选择和传送脚本，脚本以 Agent 服务用户身份执行。
+
+控制端通过已配对的 HTTP 或 HTTPS 连接调用 `POST /v1/apps/install`、`uninstall`、`status`（三个接口共用 `/v1/apps/` 前缀）。安装传 `source_id`、`app_id`、`bundle_sha256` 和清单允许的 `config`；卸载只传前两项。批量查询传 `{"apps":[{"source_id":"…","app_id":"…"}],"include_managed":true}`。动作受理后返回当前结果，后续查询同时获得执行结果和 Docker 运行状态。每台主机同时执行一个应用操作。
+
+每个应用使用独立的软件根目录 `<SOFTWARE_ROOT>/.easyhostagent-apps/<来源UUID>/<应用ID>/`。该目录下的 `deploy/.env` 和 `deploy/.secrets` 保存普通配置和密钥，卸载保留配置和应用数据。软件根目录及上级须防止被其他用户替换。脚本应按字面量读取这两份配置，每行 `KEY=VALUE`，读取时去除一层成对引号；禁止把配置作为 Shell 代码执行。包内脚本输出可能包含初始密码，接口仅返回结果与退出码。

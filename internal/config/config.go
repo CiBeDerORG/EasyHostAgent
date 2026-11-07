@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -17,7 +18,10 @@ const (
 	DefaultDataDir   = "/var/lib/easyhostagent"
 	DefaultLinuxRoot = "/opt/software"
 	DefaultFnOSRoot  = "/vol3/1000/software"
+	DefaultMacOSRoot = "/opt/software"
 	DefaultListen    = "0.0.0.0:7014"
+	EnvTransport     = "EASYHOSTAGENT_TRANSPORT"
+	EnvPlatform      = "EASYHOSTAGENT_PLATFORM"
 	EnvDataDir       = "EASYHOSTAGENT_DATA_DIR"
 	EnvSoftwareRoot  = "EASYHOSTAGENT_SOFTWARE_ROOT"
 	EnvLogLevel      = "EASYHOSTAGENT_LOG_LEVEL"
@@ -29,14 +33,35 @@ type Config struct {
 	DataDir      string
 	SoftwareRoot string
 	ListenAddr   string
+	Transport    string
 	Platform     string
 	LogLevel     slog.Level
 }
 
 func Load() (Config, error) {
+	if runtime.GOOS == "darwin" {
+		if requested := os.Getenv(EnvPlatform); requested != "" && requested != "macos" {
+			return Config{}, fmt.Errorf("macOS 原生进程必须使用 EASYHOSTAGENT_PLATFORM=macos")
+		}
+		return FromSources(func(key string) string {
+			if key == EnvPlatform {
+				return "macos"
+			}
+			return os.Getenv(key)
+		}, "", false)
+	}
 	release, _ := os.ReadFile("/etc/os-release")
 	_, markerError := os.Stat("/etc/fnos-release")
-	return FromSources(os.Getenv, string(release), markerError == nil)
+	// fnOS commonly reports Debian in /etc/os-release. Its native version
+	// marker provides an additional host-only detection path.
+	return FromSources(os.Getenv, string(release), markerError == nil || fnOSVersionMarker("/usr/trim/etc/version"))
+}
+
+// The host's fnOS version marker must be a non-empty regular file. Do not
+// follow a symlink or trust a group/world-writable file for platform detection.
+func fnOSVersionMarker(path string) bool {
+	st, err := os.Lstat(path)
+	return err == nil && st.Mode().IsRegular() && st.Size() > 0 && st.Mode().Perm()&0022 == 0
 }
 
 func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) (Config, error) {
@@ -44,16 +69,46 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 		return Config{}, fmt.Errorf("environment getter is required")
 	}
 	isFn := fnosMarker || isFnOS(osRelease)
+	isMac := false
+	// 容器内 /etc/os-release 是镜像系统，平台必须由宿主机部署配置明确告知。
+	switch getenv(EnvPlatform) {
+	case "":
+	case "linux":
+		isFn = false
+	case "fnos":
+		isFn = true
+	case "macos":
+		isFn = false
+		isMac = true
+	default:
+		return Config{}, fmt.Errorf("EASYHOSTAGENT_PLATFORM 只能为 linux、fnos 或 macos")
+	}
 	root := getenv(EnvSoftwareRoot)
 	if root == "" {
 		root = DefaultLinuxRoot
 		if isFn {
 			root = DefaultFnOSRoot
+		} else if isMac {
+			root = DefaultMacOSRoot
 		}
 	}
 	dataDir := getenv(EnvDataDir)
 	if dataDir == "" {
 		dataDir = DefaultDataDir
+		if isMac {
+			home, err := os.UserHomeDir()
+			if err != nil || home == "" {
+				return Config{}, fmt.Errorf("无法确定 macOS 用户目录")
+			}
+			dataDir = filepath.Join(home, "Library", "Application Support", "EasyHostAgent")
+		}
+	}
+	transport := getenv(EnvTransport)
+	if transport == "" {
+		transport = "https"
+	}
+	if transport != "https" && transport != "http" {
+		return Config{}, fmt.Errorf("EASYHOSTAGENT_TRANSPORT 只能为 http 或 https")
 	}
 	listenAddr := getenv(EnvListen)
 	if listenAddr == "" {
@@ -89,8 +144,10 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	platform := "linux"
 	if isFn {
 		platform = "fnos"
+	} else if isMac {
+		platform = "macos"
 	}
-	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Platform: platform, LogLevel: level}, nil
+	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level}, nil
 }
 
 func cleanAbsolute(label, value string) (string, error) {

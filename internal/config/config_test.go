@@ -2,6 +2,8 @@ package config
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -28,7 +30,7 @@ func TestFromSourcesDefaults(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.SoftwareRoot != tt.want || cfg.DataDir != DefaultDataDir || cfg.LogLevel != slog.LevelInfo || cfg.ListenAddr != DefaultListen {
+			if cfg.SoftwareRoot != tt.want || cfg.DataDir != DefaultDataDir || cfg.LogLevel != slog.LevelInfo || cfg.ListenAddr != DefaultListen || cfg.Transport != "https" {
 				t.Fatalf("cfg=%+v, want root=%s", cfg, tt.want)
 			}
 		})
@@ -52,7 +54,7 @@ func TestFromSourcesRejectsUnsafeSettings(t *testing.T) {
 	tests := []map[string]string{
 		{EnvDataDir: "relative"}, {EnvDataDir: "/"}, {EnvSoftwareRoot: "relative"}, {EnvSoftwareRoot: "/"},
 		{EnvDataDir: "/opt/software", EnvSoftwareRoot: "/opt/software"}, {EnvLogLevel: "verbose"},
-		{EnvListen: ":0"}, {EnvListen: "127.0.0.1:xyz"}, {EnvListen: "127.0.0.1:65536"}, {EnvListen: "0.0.0.0:7014/path"},
+		{EnvListen: ":0"}, {EnvListen: "127.0.0.1:xyz"}, {EnvListen: "127.0.0.1:65536"}, {EnvListen: "0.0.0.0:7014/path"}, {EnvTransport: "tcp"}, {EnvTransport: "HTTP"}, {EnvPlatform: "win"},
 	}
 	for _, values := range tests {
 		if _, err := FromSources(env(values), "", false); err == nil {
@@ -64,5 +66,70 @@ func TestMissingEnvGetter(t *testing.T) {
 	_, err := FromSources(nil, "", false)
 	if err == nil || !strings.Contains(err.Error(), "environment") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfiguredPlainHTTP(t *testing.T) {
+	cfg, err := FromSources(env(map[string]string{
+		EnvTransport: "http",
+		EnvListen:    "0.0.0.0:7014",
+	}), "ID=ubuntu", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Transport != "http" || cfg.ListenAddr != "0.0.0.0:7014" {
+		t.Fatalf("HTTP 配置没有保留: %+v", cfg)
+	}
+}
+
+func TestContainerPlatformExplicitOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, platform, osInfo, want string
+	}{
+		{"fnos_host_in_alpine_container", "fnos", "ID=alpine", "fnos"},
+		{"linux_host_in_fnos_container", "linux", "ID=fnos", "linux"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := FromSources(env(map[string]string{EnvPlatform: tc.platform}), tc.osInfo, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Platform != tc.want {
+				t.Fatalf("container host platform=%s, want=%s", cfg.Platform, tc.want)
+			}
+		})
+	}
+}
+
+func TestFnOSVersionMarkerOnDebianNativeHost(t *testing.T) {
+	version := filepath.Join(t.TempDir(), "version")
+	if fnOSVersionMarker(version) {
+		t.Fatal("missing version file must not identify fnOS")
+	}
+	if err := os.WriteFile(version, []byte("1.2.0505\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !fnOSVersionMarker(version) {
+		t.Fatal("regular read-only fnOS version file must be recognized")
+	}
+	cfg, err := FromSources(env(map[string]string{EnvSoftwareRoot: "/vol3/1000/software"}), "ID=debian\n", fnOSVersionMarker(version))
+	if err != nil || cfg.Platform != "fnos" {
+		t.Fatalf("Debian-based fnOS platform not recognized: %+v %v", cfg, err)
+	}
+	if err := os.Chmod(version, 0666); err != nil {
+		t.Fatal(err)
+	}
+	if fnOSVersionMarker(version) {
+		t.Fatal("group/world writable version file must not be trusted")
+	}
+	if err := os.Chmod(version, 0644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "version-link")
+	if err := os.Symlink(version, link); err != nil {
+		t.Fatal(err)
+	}
+	if fnOSVersionMarker(link) {
+		t.Fatal("symlink version marker must not be trusted")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -15,8 +16,10 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/dockertasks"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/host"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
@@ -35,6 +38,20 @@ func NewHandlerWithDocker(state identity.State, platform, version string, servic
 }
 
 func NewHandlerWithBundles(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithMarket(state, platform, version, service, engine, cache, nil, stores...)
+}
+
+func NewHandlerWithMarket(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithMarketTransport(state, platform, version, service, engine, cache, apps, false, stores...)
+}
+
+// NewHandlerWithMarketTransport 在显式配置 HTTP 时允许明文传输；默认继续强制 HTTPS。
+func NewHandlerWithMarketTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithDockerTasksTransport(state, platform, version, service, engine, cache, apps, nil, allowHTTP, stores...)
+}
+
+// NewHandlerWithDockerTasksTransport 只在传入已初始化的持久任务服务时开放 Docker 写操作。
+func NewHandlerWithDockerTasksTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, dockerTasks *dockertasks.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -51,22 +68,34 @@ func NewHandlerWithBundles(state identity.State, platform, version string, servi
 		if arch != "amd64" && arch != "arm64" {
 			arch = "other"
 		}
+		manifestVersions := []int{1, 2}
+		if apps == nil {
+			// 未启用应用执行器时不向控制端声明清单能力。
+			manifestVersions = []int{}
+		}
 		sendJSON(w, map[string]any{
 			"protocol_version": 1, "agent_id": state.AgentID, "hostname": host,
 			"platform": platform, "arch": arch, "version": version,
-			"tls_spki_sha256": state.SPKISHA256,
-			"observed_at":     time.Now().UTC().Format(time.RFC3339),
+			"app_manifest_versions": manifestVersions,
+			"tls_spki_sha256":       state.SPKISHA256,
+			"observed_at":           time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 	// A nil store is allowed for T01-03 legacy discovery tests only.
 	// Production must pass a persistent store.
 	if len(stores) != 0 && stores[0] != nil {
 		store := stores[0]
+		if apps != nil {
+			registerMarket(mux, state.AgentID, store, apps)
+		}
 		if service != nil {
-			registerHost(mux, state.AgentID, store, service)
+			registerHost(mux, state.AgentID, store, service, apps)
 		}
 		if engine != nil {
-			registerDocker(mux, state.AgentID, store, engine)
+			registerDocker(mux, state.AgentID, store, engine, dockerTasks != nil)
+		}
+		if dockerTasks != nil {
+			registerDockerTasks(mux, state.AgentID, store, dockerTasks)
 		}
 		if cache != nil {
 			registerBundles(mux, state.AgentID, store, cache)
@@ -100,6 +129,19 @@ func NewHandlerWithBundles(state identity.State, platform, version string, servi
 			}
 			result, e := store.Exchange(request.ControllerID, request.DeviceID, request.Code)
 			if e != nil {
+				// 不输出一次性配对码、控制端 Token、请求正文或配对状态文件内容。
+				reason := "pairing_unavailable"
+				switch {
+				case errors.Is(e, pairing.ErrRateLimited):
+					reason = "pairing_attempts_exhausted"
+				case errors.Is(e, pairing.ErrInvalidCode):
+					reason = "invalid_pairing_code"
+				case errors.Is(e, pairing.ErrInvalidIDs):
+					reason = "invalid_identity"
+				case errors.Is(e, pairing.ErrNoCode), errors.Is(e, pairing.ErrExpired):
+					reason = "pairing_window_closed"
+				}
+				slog.Warn("Agent 配对请求拒绝", "stage", "exchange", "code", reason)
 				switch {
 				case errors.Is(e, pairing.ErrRateLimited):
 					sendError(w, http.StatusTooManyRequests, "pairing_attempts_exhausted", "Generate a new code on the host")
@@ -115,6 +157,7 @@ func NewHandlerWithBundles(state identity.State, platform, version string, servi
 				}
 				return
 			}
+			slog.Info("Agent 配对授权已保存", "stage", "accepted")
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(result)
@@ -147,8 +190,11 @@ func NewHandlerWithBundles(state identity.State, platform, version string, servi
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if r.TLS == nil {
-			sendError(w, http.StatusBadRequest, "tls_required", "HTTPS is required")
-			return
+			if !allowHTTP {
+				sendError(w, http.StatusBadRequest, "tls_required", "HTTPS is required")
+				return
+			}
+			r = auth.AllowConfiguredHTTP(r)
 		}
 		mux.ServeHTTP(w, r)
 	})

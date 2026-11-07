@@ -200,7 +200,7 @@ install -d -m 0700 "$(dirname "$config_path")"
 if [[ ! -e "$config_path" ]]; then
   config_tmp="$(mktemp "$(dirname "$config_path")/.easyhostagent.env.XXXXXX")"
   chmod 0600 "$config_tmp"
-  printf 'EASYHOSTAGENT_DATA_DIR=%s\nEASYHOSTAGENT_SOFTWARE_ROOT=%s\nEASYHOSTAGENT_LOG_LEVEL=%s\n' \
+  printf 'EASYHOSTAGENT_DATA_DIR=%s\nEASYHOSTAGENT_SOFTWARE_ROOT=%s\nEASYHOSTAGENT_LOG_LEVEL=%s\nEASYHOSTAGENT_TRANSPORT=https\n' \
     "$data_dir" "$software_root" "$log_level" > "$config_tmp"
   mv -f -- "$config_tmp" "$config_path"
   say "created initial config at $config_path"

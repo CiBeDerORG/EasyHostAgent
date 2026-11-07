@@ -19,7 +19,7 @@ func TestVersionExitsWithoutLaunchingService(t *testing.T) {
 }
 func TestCheckConfig(t *testing.T) {
 	t.Setenv("EASYHOSTAGENT_DATA_DIR", filepath.Join(t.TempDir(), "state"))
-	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/tmp/agent-test-apps")
+	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", filepath.Join(t.TempDir(), "agent-test-apps"))
 	var out, errors bytes.Buffer
 	if code := run([]string{"-check-config"}, &out, &errors); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, errors.String())
@@ -35,12 +35,13 @@ func TestCheckConfigShowsSavedSoftwareRoot(t *testing.T) {
 	}
 	t.Setenv("EASYHOSTAGENT_DATA_DIR", dataDir)
 	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/opt/software")
-	if err := os.WriteFile(filepath.Join(dataDir, "host-settings.json"), []byte(`{"software_root":"/tmp/persisted-apps"}`), 0600); err != nil {
+	savedRoot := filepath.Join(t.TempDir(), "persisted-apps")
+	if err := os.WriteFile(filepath.Join(dataDir, "host-settings.json"), []byte(`{"software_root":"`+savedRoot+`"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	var out, errors bytes.Buffer
 	if code := run([]string{"-check-config"}, &out, &errors); code != 0 ||
-		!strings.Contains(out.String(), "software_root=/tmp/persisted-apps") {
+		!strings.Contains(out.String(), "software_root="+savedRoot) {
 		t.Fatalf("code=%d out=%q stderr=%q", code, out.String(), errors.String())
 	}
 }
