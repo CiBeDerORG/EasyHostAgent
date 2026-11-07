@@ -53,13 +53,13 @@ func TestMacOSMarketplaceRoutesAvailableWithoutDockerDesktop(t *testing.T) {
 
 	// Test-only self-signed agent TLS identity, without external certificate roots.
 	client := &http.Client{
-		Timeout: 300 * time.Millisecond,
+		Timeout:   300 * time.Millisecond,
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, //nolint:gosec
 	}
 	base := "https://" + addr
 	var identity struct {
-		Platform string	`json:"platform"`
-		Versions []int	`json:"app_manifest_versions"`
+		Platform string `json:"platform"`
+		Versions []int  `json:"app_manifest_versions"`
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
