@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   release:
-    name: 发布 Linux AMD64/ARM64 二进制
+    name: 发布 Linux AMD64/ARM64 与 macOS ARM64 二进制
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -66,6 +66,9 @@ jobs:
         run: |
           set -euo pipefail
           tag="v0.1.0-deploy-manifest-lifecycle.dev"
+          # 这是可滚动更新的开发标签；每次发布均让 Git Tag 指向本次构建源码。
+          git tag -f "$tag" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$tag"
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --target "$GITHUB_SHA" --title "EasyHostAgent 生命周期开发版" \
               --notes "Linux AMD64/ARM64 原生 systemd 安装包，附 SHA-256 校验文件；此开发版标签及资产可更新。" \
