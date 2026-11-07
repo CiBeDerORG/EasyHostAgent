@@ -32,7 +32,11 @@ jobs:
           export TMPDIR="$HOME/t"
           mkdir -p "$TMPDIR"
           chmod 0700 "$TMPDIR"
-          test -z "$(gofmt -l cmd internal)"
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            printf 'Unformatted Go files:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
           go vet ./...
           go test ./...
       - name: 构建 macOS ARM64 并生成 SHA-256 校验文件
@@ -57,7 +61,11 @@ jobs:
           go-version-file: go.mod
           cache: false
       - run: |
-          test -z "$(gofmt -l cmd internal)"
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            printf 'Unformatted Go files:\n%s\n' "$unformatted" >&2
+            exit 1
+          fi
           go test ./...
 
   release:
