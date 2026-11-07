@@ -69,8 +69,8 @@ func NewHandlerWithDockerTasksTransport(state identity.State, platform, version 
 			arch = "other"
 		}
 		manifestVersions := []int{1, 2}
-		if platform == "macos" {
-			// 首阶段不开放应用安装；不能向控制端虚报清单执行能力。
+		if apps == nil {
+			// 未启用应用执行器时不向控制端声明清单能力。
 			manifestVersions = []int{}
 		}
 		sendJSON(w, map[string]any{
