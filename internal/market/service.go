@@ -189,10 +189,22 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 			if p, ok := projects[ref.App]; ok {
 				row.State = p.Status
 				legacyMatch := s.validLegacyProject(p, ref.App)
+				macOSVerified := s.platform == "macos" && ref.App == "easynettopo" &&
+					(r.Mode == "" || r.Mode == macOSEasyNetTopoMode) &&
+					s.validMacOSEasyNetTopoProject(p)
+				if macOSVerified {
+					_, checkErr := s.macOSEasyNetTopoScript()
+					macOSVerified = checkErr == nil
+				}
+				if macOSVerified && !foreign {
+					row.Managed = true // 只对经过固定双 Compose 身份和本机脚本核验的现有部署展示可更新状态。
+					row.Mode = macOSEasyNetTopoMode
+				}
 				// Existing Agent-managed apps use private workspace labels.
 				// An explicitly adopted legacy Deploy app must still match
 				// its original, fixed Compose directory on every scan.
-				row.External = !r.Managed || (r.Mode == legacyDeployMode || r.Mode == directDeployMode) && !legacyMatch
+				row.External = !row.Managed || (r.Mode == legacyDeployMode || r.Mode == directDeployMode) && !legacyMatch ||
+					r.Mode == macOSEasyNetTopoMode && !macOSVerified
 				if row.External {
 					row.Allowed = false
 					if !s.hasGrant(controller, ref) {
@@ -273,7 +285,7 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if old.App != "" && old.Source != req.Source {
 		return Record{}, ErrConflict
 	}
-	if name == "update" && !old.Managed {
+	if name == "update" && !old.Managed && !(s.platform == "macos" && req.App == "easynettopo") {
 		return Record{}, errors.New("应用尚未安装，请先安装")
 	}
 	if name == "uninstall" {
@@ -299,6 +311,13 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	}
 	if name == "update" && m.Actions["update"].Strategy != "script" {
 		return Record{}, errors.New("应用未声明受支持的更新脚本")
+	}
+	// macOS EasyNetTopo 只复用本机原生 Deploy 更新入口，不执行 Git 包的 Linux 脚本。
+	if s.platform == "macos" && req.App == "easynettopo" {
+		if name != "update" {
+			return Record{}, errors.New("macOS EasyNetTopo 只允许更新，不支持应用市场安装或卸载")
+		}
+		return s.startMacOSEasyNetTopoUpdate(ctx, req, old, m, authorized)
 	}
 	if name == "install" || name == "update" {
 		if !slices.Contains(m.Compatibility.Platforms, s.platform) || !slices.Contains(m.Compatibility.Architectures, runtime.GOARCH) {
@@ -449,7 +468,16 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 	a := m.Actions[rec.Action]
 	env := scriptEnvironment(s.platform)
 	var cmd *exec.Cmd
-	if rec.Mode == legacyDeployMode || rec.Mode == directDeployMode {
+	if rec.Mode == macOSEasyNetTopoMode {
+		// Only the fixed, previously installed Deploy macOS entry point may execute.
+		path, err := s.macOSEasyNetTopoScript()
+		if err != nil {
+			s.finishLegacyFailure(rec, err)
+			return
+		}
+		env = append(env, "SOFTWARE_ROOT="+filepath.Dir(s.root))
+		cmd = exec.CommandContext(ctx, "/bin/bash", path, "easynettopo", "update")
+	} else if rec.Mode == legacyDeployMode || rec.Mode == directDeployMode {
 		// Execute only the fixed, locally approved original Deploy script.
 		// The UI never provides paths, script bodies or arbitrary args.
 		path, err := s.legacyScript(rec.App, rec.Action)
