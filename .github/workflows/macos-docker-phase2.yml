@@ -3,6 +3,7 @@ name: EasyHostAgent macOS Docker 第二阶段验证
 on:
   push:
     branches:
+      - main
       - feat/macos-docker-phase2-20261106
   pull_request:
     paths:
