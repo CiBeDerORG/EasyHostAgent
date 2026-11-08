@@ -91,6 +91,18 @@ jobs:
           python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); assert x["platform"]=="macos" and x["cpu"]["logical_cores"]>0 and x["memory"]["total_bytes"]>0 and x["disks"]; print("macOS host snapshot verified")' "$RUNNER_TEMP/host.json"
           status="$(curl --silent --insecure -X POST -H 'Content-Type: application/json' -d '{"apps":[]}' -o /dev/null -w '%{http_code}' https://127.0.0.1:7018/v1/apps/status)"
           test "$status" = 401
+      - name: 验证 launchd 独立一次性任务可执行
+        shell: bash
+        run: |
+          set -euo pipefail
+          flag="$RUNNER_TEMP/easyhostagent-launchctl-submit-smoke"
+          label="org.cibeder.easyhostagent-smoke-$GITHUB_RUN_ID"
+          /bin/launchctl submit -l "$label" -- /bin/bash -c 'sleep 1; printf ok > "$1"; exit 0' smoke "$flag"
+          for i in {1..15}; do
+            if [[ -f "$flag" ]]; then break; fi
+            sleep 1
+          done
+          test "$(cat "$flag")" = ok
       - uses: actions/upload-artifact@v4
         with:
           name: easyhostagent-darwin-arm64-phase1
