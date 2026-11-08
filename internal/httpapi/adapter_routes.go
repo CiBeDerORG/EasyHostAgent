@@ -47,12 +47,18 @@ func registerAdapters(mux *http.ServeMux, agentID string, store *pairing.Store, 
 					sendError(w, 400, "invalid_request", "端口转发查询参数无效")
 					return
 				}
-				if len(q[key]) != 1 { sendError(w, 400, "invalid_request", "查询参数重复"); return }
+				if len(q[key]) != 1 {
+					sendError(w, 400, "invalid_request", "查询参数重复")
+					return
+				}
 			}
 		}
 		selector := adapters.InstanceSelector{InstanceID: q.Get("instance_id"), InstanceName: q.Get("instance_name")}
 		data, err := drivers.PortForwards(r.Context(), q.Get("resource_id"), selector)
-		if err != nil { sendPortForwardError(w, err); return }
+		if err != nil {
+			sendPortForwardError(w, err)
+			return
+		}
 		sendJSON(w, map[string]any{"agent_id": agentID, "adapter_type": "easytier", "resource_id": q.Get("resource_id"), "data": json.RawMessage(data)})
 	})))
 	mux.Handle("POST /v1/adapters/easytier/port-forwards", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -41,7 +41,9 @@ func selectorArgs(selector InstanceSelector, requireTarget bool) ([]string, erro
 		return nil, ErrInvalidPortForward
 	}
 	if selector.InstanceID != "" {
-		if !uuidPattern.MatchString(selector.InstanceID) { return nil, ErrInvalidPortForward }
+		if !uuidPattern.MatchString(selector.InstanceID) {
+			return nil, ErrInvalidPortForward
+		}
 		return []string{"--instance-id", selector.InstanceID}, nil
 	}
 	if selector.InstanceName != "" {
@@ -51,7 +53,9 @@ func selectorArgs(selector InstanceSelector, requireTarget bool) ([]string, erro
 		}
 		return []string{"--instance-name", selector.InstanceName}, nil
 	}
-	if requireTarget { return nil, ErrInvalidPortForward }
+	if requireTarget {
+		return nil, ErrInvalidPortForward
+	}
 	return nil, nil
 }
 
@@ -60,31 +64,53 @@ func socketAddress(value string, isListener bool) (string, bool, error) {
 		return "", false, ErrInvalidPortForward
 	}
 	host, port, err := net.SplitHostPort(value)
-	if err != nil { return "", false, ErrInvalidPortForward }
+	if err != nil {
+		return "", false, ErrInvalidPortForward
+	}
 	ip := net.ParseIP(host)
-	if ip == nil || ip.IsMulticast() { return "", false, ErrInvalidPortForward }
+	if ip == nil || ip.IsMulticast() {
+		return "", false, ErrInvalidPortForward
+	}
 	if !isListener && (ip.IsUnspecified() || ip.Equal(net.IPv4bcast)) {
 		return "", false, ErrInvalidPortForward
 	}
 	number, err := strconv.Atoi(port)
-	if err != nil || number < 1 || number > 65535 { return "", false, ErrInvalidPortForward }
+	if err != nil || number < 1 || number > 65535 {
+		return "", false, ErrInvalidPortForward
+	}
 	return net.JoinHostPort(ip.String(), strconv.Itoa(number)), ip.IsUnspecified(), nil
 }
 
 func portForwardArgs(action string, req PortForwardRequest) ([]string, error) {
-	if req.ResourceID != "compose:easytier" { return nil, ErrInvalidPortForward }
+	if req.ResourceID != "compose:easytier" {
+		return nil, ErrInvalidPortForward
+	}
 	args, err := selectorArgs(InstanceSelector{InstanceID: req.InstanceID, InstanceName: req.InstanceName}, true)
-	if err != nil { return nil, err }
-	if action != "add" && action != "remove" { return nil, ErrInvalidPortForward }
-	if req.Protocol != "tcp" && req.Protocol != "udp" { return nil, ErrInvalidPortForward }
+	if err != nil {
+		return nil, err
+	}
+	if action != "add" && action != "remove" {
+		return nil, ErrInvalidPortForward
+	}
+	if req.Protocol != "tcp" && req.Protocol != "udp" {
+		return nil, ErrInvalidPortForward
+	}
 	listen, exposed, err := socketAddress(req.Listen, true)
-	if err != nil { return nil, err }
-	if action == "add" && exposed && !req.AllowPublicBind { return nil, ErrInvalidPortForward }
+	if err != nil {
+		return nil, err
+	}
+	if action == "add" && exposed && !req.AllowPublicBind {
+		return nil, ErrInvalidPortForward
+	}
 	args = append(args, "port-forward", action, req.Protocol, listen)
-	if action == "add" && req.Destination == "" { return nil, ErrInvalidPortForward }
+	if action == "add" && req.Destination == "" {
+		return nil, ErrInvalidPortForward
+	}
 	if req.Destination != "" {
 		destination, _, err := socketAddress(req.Destination, false)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		args = append(args, destination)
 	}
 	return args, nil
@@ -95,36 +121,56 @@ func portForwardArgs(action string, req PortForwardRequest) ([]string, error) {
 var mutationMu sync.Mutex
 
 func (d *Driver) ListPortForwards(ctx context.Context, resourceID string, selector InstanceSelector) (json.RawMessage, error) {
-	if resourceID != "compose:easytier" { return nil, ErrInvalidPortForward }
+	if resourceID != "compose:easytier" {
+		return nil, ErrInvalidPortForward
+	}
 	args, err := selectorArgs(selector, false)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	containerID, err := d.findContainer(ctx, resourceID)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	rpc, err := d.engine.EasyTierRPCAddress(ctx, containerID)
-	if err != nil { return nil, errors.New("EasyTier RPC 端口不可用") }
+	if err != nil {
+		return nil, errors.New("EasyTier RPC 端口不可用")
+	}
 	argv := append([]string{"easytier-cli", "-p", rpc, "-o", "json"}, args...)
 	argv = append(argv, "port-forward", "list")
 	output, err := d.engine.Exec(ctx, containerID, argv)
-	if err != nil { return nil, fmt.Errorf("EasyTier 端口转发查询失败: %w", err) }
-	if !json.Valid(output) { return nil, errors.New("EasyTier 端口转发结果不是有效 JSON") }
+	if err != nil {
+		return nil, fmt.Errorf("EasyTier 端口转发查询失败: %w", err)
+	}
+	if !json.Valid(output) {
+		return nil, errors.New("EasyTier 端口转发结果不是有效 JSON")
+	}
 	return json.RawMessage(output), nil
 }
 
 func (d *Driver) ModifyPortForward(ctx context.Context, req PortForwardRequest, action string) error {
 	args, err := portForwardArgs(action, req)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	mutationMu.Lock()
 	defer mutationMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	containerID, err := d.findContainer(ctx, req.ResourceID)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	rpc, err := d.engine.EasyTierRPCAddress(ctx, containerID)
-	if err != nil { return errors.New("EasyTier RPC 端口不可用") }
+	if err != nil {
+		return errors.New("EasyTier RPC 端口不可用")
+	}
 	argv := append([]string{"easytier-cli", "-p", rpc}, args...)
 	_, err = d.engine.Exec(ctx, containerID, argv)
-	if err != nil { return fmt.Errorf("EasyTier 端口转发修改失败: %w", err) }
+	if err != nil {
+		return fmt.Errorf("EasyTier 端口转发修改失败: %w", err)
+	}
 	return nil
 }
