@@ -160,13 +160,21 @@ func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owne
 	}
 	for _, dir := range []string{
 		root, filepath.Join(root, "deploy"), filepath.Join(root, "deploy", "macos"),
-		filepath.Join(root, "deploy", "lib"), filepath.Join(root, "deploy", "state"),
+		filepath.Join(root, "deploy", "lib"),
 		filepath.Join(root, "easyhostagent"), filepath.Join(root, "easyhostagent", "native"),
 		filepath.Join(root, "easyhostagent", "native", "bin"),
 	} {
 		if err := validateNativePath(dir, true, root, "macos", owner); err != nil {
 			return err
 		}
+	}
+	// 老版 macOS 安装器未必创建 state；仅在根目录校验后创建固定目录。
+	stateDir := filepath.Join(root, "deploy", "state")
+	if err := os.Mkdir(stateDir, 0700); err != nil && !os.IsExist(err) {
+		return fmt.Errorf("%w: 无法建立受控更新状态目录", ErrNativeUpdateUnavailable)
+	}
+	if err := validateNativePath(stateDir, true, root, "macos", owner); err != nil {
+		return err
 	}
 	for path := filepath.Dir(root); path != "/"; path = filepath.Dir(path) {
 		if err := inspectNativeUpdatePath(path, true, root, "macos", owner, true); err != nil {
