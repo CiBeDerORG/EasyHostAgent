@@ -3,7 +3,7 @@ name: EasyHostAgent 原生程序发布
 on:
   push:
     branches:
-      - feat/deploy-manifest-lifecycle
+      - main
     paths:
       - "cmd/**"
       - "internal/**"
