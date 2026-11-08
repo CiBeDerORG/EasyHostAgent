@@ -150,7 +150,6 @@ func queueNativeUpdate(ctx context.Context, root, platform, action, runner, mark
 	return nil
 }
 
-
 // macOS 使用登录用户的 launchd 创建独立一次性更新任务。命令固定且不接受远程路径。
 // 更新脚本始终使用仓库统一 Release 和 SHA-256 校验；服务重启不会杀死更新任务。
 func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owner uint32) error {
