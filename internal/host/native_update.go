@@ -17,7 +17,7 @@ import (
 
 var ErrNativeUpdateUnavailable = errors.New("原生 Agent 更新环境不满足要求")
 
-// QueueSelfUpdate 只接受已配对控制端的固定动作；独立 systemd timer 在 HTTP 返回之后执行。
+// QueueSelfUpdate 只接受已配对控制端的固定动作；Linux/fnOS 使用 systemd，macOS 使用用户 launchd 延迟执行。
 // 不接收远端 Shell、路径、下载 URL 或任何可执行参数。
 func (s *Service) QueueSelfUpdate(ctx context.Context, action string) error {
 	root, err := s.Root()
