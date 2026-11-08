@@ -33,7 +33,7 @@ func registerHost(mux *http.ServeMux, agentID string, store *pairing.Store, serv
 			// A trusted administrator can inspect the failed preflight path in
 			// journalctl -u easyhostagent without exposing credentials to the UI.
 			slog.Warn("agent_self_update_rejected", "action", r.PathValue("action"), "reason", err.Error())
-			sendError(w, http.StatusServiceUnavailable, "maintenance_unavailable", "Cannot schedule native update; inspect host systemd and Deploy installation")
+			sendError(w, http.StatusServiceUnavailable, "maintenance_unavailable", "Cannot schedule native update; inspect host service manager and Deploy installation")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

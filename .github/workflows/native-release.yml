@@ -79,3 +79,23 @@ jobs:
             dist/easyhostagent-linux-amd64 dist/easyhostagent-linux-amd64.sha256 \
             dist/easyhostagent-linux-arm64 dist/easyhostagent-linux-arm64.sha256 \
             dist/easyhostagent-darwin-arm64 dist/easyhostagent-darwin-arm64.sha256 --clobber
+
+      - name: Notify EasyNetTopo after successful native Release
+        if: success() && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          HOOK_URL: http://49.235.163.195:7017/api/hooks/deploy/update
+          HOOK_TOKEN: ${{ secrets.EASYNETTOPO_HOOK_TOKEN }}
+          HOOK_TARGETS_JSON: ${{ vars.EASYNETTOPO_HOOK_TARGETS_JSON }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOOK_TARGETS_JSON:-}" ]]; then
+            echo "::notice::No EasyHostAgent Hook targets configured; skip."
+            exit 0
+          fi
+          [[ -n "${HOOK_TOKEN:-}" ]] || { echo "::error::Missing EASYNETTOPO_HOOK_TOKEN"; exit 1; }
+          jq -e 'type == "array" and length >= 1 and length <= 64' <<< "$HOOK_TARGETS_JSON" >/dev/null
+          payload="$(jq -cn --argjson targets "$HOOK_TARGETS_JSON" '{trigger_source:"github_actions",targets:$targets}')"
+          curl --fail-with-body --silent --show-error --max-time 30 -X POST "$HOOK_URL" \
+            -H "Authorization: Bearer $HOOK_TOKEN" \
+            -H "Content-Type: application/json" --data-binary "$payload"

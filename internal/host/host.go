@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/CiBeDerORG/EasyHostAgent/internal/buildinfo"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 )
 
@@ -48,13 +49,15 @@ type Docker struct {
 	Error            string `json:"error,omitempty"`
 }
 type Snapshot struct {
-	AgentID    string `json:"agent_id"`
-	StartedAt  string `json:"agent_started_at"`
-	ObservedAt string `json:"observed_at"`
-	Hostname   string `json:"hostname"`
-	Platform   string `json:"platform"`
-	Arch       string `json:"arch"`
-	CPU        struct {
+	AgentID      string `json:"agent_id"`
+	StartedAt    string `json:"agent_started_at"`
+	AgentCommit  string `json:"agent_commit"`
+	AgentVersion string `json:"agent_version"`
+	ObservedAt   string `json:"observed_at"`
+	Hostname     string `json:"hostname"`
+	Platform     string `json:"platform"`
+	Arch         string `json:"arch"`
+	CPU          struct {
 		LogicalCores int `json:"logical_cores"`
 	} `json:"cpu"`
 	Memory struct {
@@ -194,7 +197,7 @@ func (s *Service) Snapshot(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	hostName, _ := os.Hostname()
-	x := Snapshot{AgentID: s.agentID, StartedAt: s.startedAt, ObservedAt: time.Now().UTC().Format(time.RFC3339), Hostname: hostName, Platform: s.platform, Arch: runtime.GOARCH, SoftwareRoot: root, Disks: []Disk{}}
+	x := Snapshot{AgentID: s.agentID, StartedAt: s.startedAt, AgentCommit: buildinfo.Commit, AgentVersion: buildinfo.Version, ObservedAt: time.Now().UTC().Format(time.RFC3339), Hostname: hostName, Platform: s.platform, Arch: runtime.GOARCH, SoftwareRoot: root, Disks: []Disk{}}
 	x.CPU.LogicalCores = runtime.NumCPU()
 	if x.CPU.LogicalCores < 1 {
 		x.CPU.LogicalCores = 1
