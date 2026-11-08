@@ -30,6 +30,10 @@ actions:
 data: {default_retain: true}
 verification: {required_services: [api]}
 `, app, app)
+	if app == "easynettopo" {
+		manifest = strings.Replace(manifest, "platforms: [linux, fnos]", "platforms: [linux, fnos, macos]", 1)
+		manifest = strings.Replace(manifest, "required_services: [api]", "required_services: [easynettopo]", 1)
+	}
 	v2 := len(versions) > 0 && versions[0] == 2
 	if v2 {
 		manifest += "schema_version: 2\nconfiguration: {config: config.yaml, secrets: secrets.yaml}\n"
