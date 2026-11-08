@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/CiBeDerORG/EasyHostAgent/internal/adapters"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/auth"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
@@ -52,6 +53,11 @@ func NewHandlerWithMarketTransport(state identity.State, platform, version strin
 
 // NewHandlerWithDockerTasksTransport 只在传入已初始化的持久任务服务时开放 Docker 写操作。
 func NewHandlerWithDockerTasksTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, dockerTasks *dockertasks.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
+	return NewHandlerWithAdaptersTransport(state, platform, version, service, engine, cache, apps, dockerTasks, nil, allowHTTP, stores...)
+}
+
+// NewHandlerWithAdaptersTransport 将可选的只读 Driver 路由放入既有配对认证边界。
+func NewHandlerWithAdaptersTransport(state identity.State, platform, version string, service *host.Service, engine *dockerengine.Client, cache *bundles.Store, apps *market.Service, dockerTasks *dockertasks.Service, adapterService *adapters.Service, allowHTTP bool, stores ...*pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		if !onlyGET(w, r) {
@@ -93,6 +99,9 @@ func NewHandlerWithDockerTasksTransport(state identity.State, platform, version 
 		}
 		if engine != nil {
 			registerDocker(mux, state.AgentID, store, engine, dockerTasks != nil)
+		}
+		if adapterService != nil {
+			registerAdapters(mux, state.AgentID, store, adapterService)
 		}
 		if dockerTasks != nil {
 			registerDockerTasks(mux, state.AgentID, store, dockerTasks)
