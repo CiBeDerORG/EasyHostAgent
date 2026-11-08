@@ -12,11 +12,11 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/dockerengine"
 )
 
-type Driver struct { engine *dockerengine.Client }
+type Driver struct{ engine *dockerengine.Client }
 
 func New(engine *dockerengine.Client) *Driver { return &Driver{engine: engine} }
-func (d *Driver) Type() string { return "easytier" }
-func (d *Driver) Capabilities() []string { return []string{"node", "peer", "route"} }
+func (d *Driver) Type() string                { return "easytier" }
+func (d *Driver) Capabilities() []string      { return []string{"node", "peer", "route"} }
 
 func (d *Driver) Read(ctx context.Context, resourceID, capability string) (json.RawMessage, error) {
 	if resourceID != "compose:easytier" {

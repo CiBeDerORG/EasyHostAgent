@@ -17,7 +17,9 @@ func registerAdapters(mux *http.ServeMux, agentID string, store *pairing.Store, 
 		sendJSON(w, map[string]any{"agent_id": agentID, "types": drivers.Types()})
 	})))
 	mux.Handle("PUT /v1/adapters/types/{type}", auth.RequireController(agentID, store, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var input struct { Enabled *bool `json:"enabled"` }
+		var input struct {
+			Enabled *bool `json:"enabled"`
+		}
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
 		decoder.DisallowUnknownFields()
 		if r.Header.Get("Content-Type") != "application/json" || decoder.Decode(&input) != nil || input.Enabled == nil || decoder.Decode(new(any)) != io.EOF {

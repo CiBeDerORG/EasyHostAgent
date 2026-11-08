@@ -48,7 +48,7 @@ func New(dataDir string, engine *dockerengine.Client) (*Service, error) {
 	}
 	driver := easytier.New(engine)
 	s := &Service{
-		path: filepath.Join(dataDir, "adapter-settings.json"),
+		path:    filepath.Join(dataDir, "adapter-settings.json"),
 		drivers: map[string]Driver{driver.Type(): driver},
 		enabled: map[string]bool{},
 	}

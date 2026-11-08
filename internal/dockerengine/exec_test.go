@@ -14,13 +14,17 @@ func stream(stream byte, data string) []byte {
 	return buf
 }
 func TestReadMultiplexed(t *testing.T) {
-	raw := append(stream(1, "{\"peers\":[]}" ), stream(2, "warning")...)
+	raw := append(stream(1, "{\"peers\":[]}"), stream(2, "warning")...)
 	out, stderr, err := readMultiplexed(raw)
 	if err != nil || string(out) != "{\"peers\":[]}" || stderr != "warning" {
 		t.Fatalf("unexpected result: %q %q %v", out, stderr, err)
 	}
-	if _, _, err := readMultiplexed([]byte{1, 0}); err == nil { t.Fatal("truncated stream accepted") }
+	if _, _, err := readMultiplexed([]byte{1, 0}); err == nil {
+		t.Fatal("truncated stream accepted")
+	}
 	bad := bytes.Clone(stream(1, "ok"))
 	bad[0] = 3
-	if _, _, err := readMultiplexed(bad); err == nil { t.Fatal("unknown stream accepted") }
+	if _, _, err := readMultiplexed(bad); err == nil {
+		t.Fatal("unknown stream accepted")
+	}
 }

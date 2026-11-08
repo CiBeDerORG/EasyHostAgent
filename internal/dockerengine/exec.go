@@ -29,10 +29,14 @@ func readMultiplexed(data []byte) ([]byte, string, error) {
 		frame := data[8 : 8+int(size)]
 		switch data[0] {
 		case 1:
-			if stdout.Len()+len(frame) > maxExecOutput { return nil, "", ErrProtocol }
+			if stdout.Len()+len(frame) > maxExecOutput {
+				return nil, "", ErrProtocol
+			}
 			stdout.Write(frame)
 		case 2:
-			if stderr.Len()+len(frame) > maxExecOutput { return nil, "", ErrProtocol }
+			if stderr.Len()+len(frame) > maxExecOutput {
+				return nil, "", ErrProtocol
+			}
 			stderr.Write(frame)
 		default:
 			return nil, "", ErrProtocol
@@ -59,12 +63,18 @@ func (c *Client) Exec(ctx context.Context, containerID string, argv []string) ([
 	path := "http://docker.local/v" + snapshot.APIVersion
 	post := func(urlPath string, body any, accepted int) ([]byte, error) {
 		raw, e := json.Marshal(body)
-		if e != nil { return nil, ErrProtocol }
+		if e != nil {
+			return nil, ErrProtocol
+		}
 		req, e := http.NewRequestWithContext(ctx, http.MethodPost, path+urlPath, bytes.NewReader(raw))
-		if e != nil { return nil, ErrProtocol }
+		if e != nil {
+			return nil, ErrProtocol
+		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, e := c.http.Do(req)
-		if e != nil { return nil, fmt.Errorf("%w: Docker Exec unreachable", ErrUnavailable) }
+		if e != nil {
+			return nil, fmt.Errorf("%w: Docker Exec unreachable", ErrUnavailable)
+		}
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return nil, ErrPermission
@@ -73,28 +83,49 @@ func (c *Client) Exec(ctx context.Context, containerID string, argv []string) ([
 			return nil, fmt.Errorf("%w: Docker Exec HTTP %d", ErrUnavailable, resp.StatusCode)
 		}
 		data, e := io.ReadAll(io.LimitReader(resp.Body, maxExecOutput+1))
-		if e != nil || len(data) > maxExecOutput { return nil, ErrProtocol }
+		if e != nil || len(data) > maxExecOutput {
+			return nil, ErrProtocol
+		}
 		return data, nil
 	}
 	raw, err := post("/containers/"+url.PathEscape(containerID)+"/exec", map[string]any{
 		"AttachStdout": true, "AttachStderr": true, "Tty": false, "Cmd": argv,
 	}, http.StatusCreated)
-	if err != nil { return nil, err }
-	var created struct { ID string `json:"Id"` }
-	if json.Unmarshal(raw, &created) != nil || !validContainerID(created.ID) { return nil, ErrProtocol }
+	if err != nil {
+		return nil, err
+	}
+	var created struct {
+		ID string `json:"Id"`
+	}
+	if json.Unmarshal(raw, &created) != nil || !validContainerID(created.ID) {
+		return nil, ErrProtocol
+	}
 	raw, err = post("/exec/"+url.PathEscape(created.ID)+"/start", map[string]bool{
 		"Detach": false, "Tty": false,
 	}, http.StatusOK)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	output, _, err := readMultiplexed(raw)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, path+"/exec/"+url.PathEscape(created.ID)+"/json", nil)
-	if err != nil { return nil, ErrProtocol }
+	if err != nil {
+		return nil, ErrProtocol
+	}
 	resp, err := c.http.Do(req)
-	if err != nil { return nil, fmt.Errorf("%w: Docker Exec inspect unavailable", ErrUnavailable) }
+	if err != nil {
+		return nil, fmt.Errorf("%w: Docker Exec inspect unavailable", ErrUnavailable)
+	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK { return nil, fmt.Errorf("%w: Docker Exec inspect HTTP %d", ErrUnavailable, resp.StatusCode) }
-	var info struct { Running bool `json:"Running"`; ExitCode int `json:"ExitCode"` }
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: Docker Exec inspect HTTP %d", ErrUnavailable, resp.StatusCode)
+	}
+	var info struct {
+		Running  bool `json:"Running"`
+		ExitCode int  `json:"ExitCode"`
+	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1024)).Decode(&info); err != nil {
 		return nil, errors.Join(ErrProtocol, err)
 	}
