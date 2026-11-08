@@ -148,3 +148,52 @@ func TestNativeUpdateRejectsGroupWritableDirectory(t *testing.T) {
 		t.Fatalf("group/world writable source must be rejected with path detail: %v", err)
 	}
 }
+
+
+func TestMacNativeUpdateUsesDetachedLaunchdAndRelease(t *testing.T) {
+	root, runner, result, _ := nativeUpdateFixture(t)
+	for _, dir := range []string{
+		filepath.Join(root, "deploy", "macos"),
+		filepath.Join(root, "deploy", "state"),
+		filepath.Join(root, "easyhostagent", "native", "bin"),
+	} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{
+		"deploy/macos/agent-install.sh",
+		"deploy/lib/versions.sh",
+		"deploy/lib/versions.env",
+		"easyhostagent/native/.managed-by-macos-deploy",
+		"easyhostagent/native/bin/easyhostagent",
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("test"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, action := range []string{"update", "force-update"} {
+		if err := queueMacNativeUpdate(context.Background(), root, action, runner, uint32(os.Geteuid())); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, expected := range []string{"submit", "org.cibeder.easyhostagent-self-update.", "sleep 5",
+			"agent-install.sh", "lockf", root, action} {
+			if !strings.Contains(string(data), expected) {
+				t.Fatalf("macOS launchd update missing %q: %s", expected, data)
+			}
+		}
+	}
+	if err := queueMacNativeUpdate(context.Background(), root, "uninstall", runner, uint32(os.Geteuid())); !errors.Is(err, ErrNativeUpdateUnavailable) {
+		t.Fatalf("unexpected uninstall acceptance: %v", err)
+	}
+	if err := os.Remove(filepath.Join(root, "easyhostagent", "native", ".managed-by-macos-deploy")); err != nil {
+		t.Fatal(err)
+	}
+	if err := queueMacNativeUpdate(context.Background(), root, "update", runner, uint32(os.Geteuid())); !errors.Is(err, ErrNativeUpdateUnavailable) {
+		t.Fatalf("unmanaged agent accepted: %v", err)
+	}
+}
