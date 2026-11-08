@@ -2,6 +2,8 @@ package host
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -18,11 +20,17 @@ var ErrNativeUpdateUnavailable = errors.New("原生 Agent 更新环境不满足�
 // QueueSelfUpdate 只接受已配对控制端的固定动作；独立 systemd timer 在 HTTP 返回之后执行。
 // 不接收远端 Shell、路径、下载 URL 或任何可执行参数。
 func (s *Service) QueueSelfUpdate(ctx context.Context, action string) error {
-	if os.Geteuid() != 0 {
-		return ErrNativeUpdateUnavailable
-	}
 	root, err := s.Root()
 	if err != nil {
+		return ErrNativeUpdateUnavailable
+	}
+	if s.platform == "macos" {
+		if os.Geteuid() == 0 {
+			return ErrNativeUpdateUnavailable
+		}
+		return queueMacNativeUpdate(ctx, root, action, "/bin/launchctl", uint32(os.Geteuid()))
+	}
+	if os.Geteuid() != 0 {
 		return ErrNativeUpdateUnavailable
 	}
 	return queueNativeUpdate(ctx, root, s.platform, action, "systemd-run", "/etc/easyhostagent/managed-by-installer", 0)
@@ -138,6 +146,69 @@ func queueNativeUpdate(ctx context.Context, root, platform, action, runner, mark
 	// stderr 可能包含敏感运行环境，不回传；详细原因由开发者从 systemd journal 查询。
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%w: systemd-run 排队失败，可能已有任务正在执行：%v", ErrNativeUpdateUnavailable, err)
+	}
+	return nil
+}
+
+
+// macOS 使用登录用户的 launchd 创建独立一次性更新任务。命令固定且不接受远程路径。
+// 更新脚本始终使用仓库统一 Release 和 SHA-256 校验；服务重启不会杀死更新任务。
+func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owner uint32) error {
+	if (action != "update" && action != "force-update") ||
+		!filepath.IsAbs(root) || root == "/" || filepath.Clean(root) != root {
+		return ErrNativeUpdateUnavailable
+	}
+	for _, dir := range []string{
+		root, filepath.Join(root, "deploy"), filepath.Join(root, "deploy", "macos"),
+		filepath.Join(root, "deploy", "lib"), filepath.Join(root, "deploy", "state"),
+		filepath.Join(root, "easyhostagent"), filepath.Join(root, "easyhostagent", "native"),
+		filepath.Join(root, "easyhostagent", "native", "bin"),
+	} {
+		if err := validateNativePath(dir, true, root, "macos", owner); err != nil {
+			return err
+		}
+	}
+	for path := filepath.Dir(root); path != "/"; path = filepath.Dir(path) {
+		if err := inspectNativeUpdatePath(path, true, root, "macos", owner, true); err != nil {
+			return err
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(root, "deploy", "macos", "agent-install.sh"),
+		filepath.Join(root, "deploy", "lib", "versions.sh"),
+		filepath.Join(root, "deploy", "lib", "versions.env"),
+		filepath.Join(root, "deploy", ".env"),
+		filepath.Join(root, "easyhostagent", "native", ".managed-by-macos-deploy"),
+		filepath.Join(root, "easyhostagent", "native", "bin", "easyhostagent"),
+	} {
+		if err := validateNativePath(path, false, root, "macos", owner); err != nil {
+			return err
+		}
+	}
+	// launchctl submit 自动重试非零退出的任务；包装层即使下载失败也以零退出，
+	// 让控制端判定更新未成功，而不是无限重复执行可能有副作用的更新。
+	var nonce [8]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return ErrNativeUpdateUnavailable
+	}
+	if !filepath.IsAbs(runner) {
+		return ErrNativeUpdateUnavailable
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, runner, "submit",
+		"-l", "org.cibeder.easyhostagent-self-update."+hex.EncodeToString(nonce[:]),
+		"-o", filepath.Join(root, "deploy", "state", "easyhostagent-update.stdout.log"),
+		"-e", filepath.Join(root, "deploy", "state", "easyhostagent-update.stderr.log"),
+		"--", "/bin/bash", "-c",
+		`sleep 5; /usr/bin/lockf -t 0 "$1/deploy/state/easyhostagent.macos-update.lock" /bin/bash "$1/deploy/macos/agent-install.sh" "$2" "$1"; exit 0`,
+		"easyhostagent-self-update", root, action)
+	cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}
+	if home, err := os.UserHomeDir(); err == nil {
+		cmd.Env = append(cmd.Env, "HOME="+home)
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: launchctl 无法提交原生更新任务: %v", ErrNativeUpdateUnavailable, err)
 	}
 	return nil
 }
