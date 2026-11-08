@@ -59,9 +59,14 @@ func (d *Driver) Read(ctx context.Context, resourceID, capability string) (json.
 	}
 	queryCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
+	// 读取容器当前配置的 RPC 端口，支持用户在应用商店自定义端口。
+	rpcAddress, err := d.engine.EasyTierRPCAddress(queryCtx, containerID)
+	if err != nil {
+		return nil, errors.New("无法确认 EasyTier RPC 端口")
+	}
 	// 不运行 Shell，不接收浏览器传来的任意参数；RPC 仅在容器本地访问。
 	output, err := d.engine.Exec(queryCtx, containerID,
-		[]string{"easytier-cli", "-p", "127.0.0.1:7006", "-v", "-o", "json", capability})
+		[]string{"easytier-cli", "-p", rpcAddress, "-v", "-o", "json", capability})
 	if err != nil {
 		return nil, fmt.Errorf("EasyTier CLI 查询失败: %w", err)
 	}
