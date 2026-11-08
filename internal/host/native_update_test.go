@@ -149,7 +149,6 @@ func TestNativeUpdateRejectsGroupWritableDirectory(t *testing.T) {
 	}
 }
 
-
 func TestMacNativeUpdateUsesDetachedLaunchdAndRelease(t *testing.T) {
 	root, runner, result, _ := nativeUpdateFixture(t)
 	for _, dir := range []string{
