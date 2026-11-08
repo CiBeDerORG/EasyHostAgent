@@ -24,6 +24,16 @@ type Driver interface {
 	Read(context.Context, string, string) (json.RawMessage, error)
 }
 
+// PortForwardDriver is an optional capability: other Driver types are not
+// required to implement network configuration mutation.
+type PortForwardDriver interface {
+	ListPortForwards(context.Context, string, easytier.InstanceSelector) (json.RawMessage, error)
+	ModifyPortForward(context.Context, easytier.PortForwardRequest, string) error
+}
+
+type PortForwardRequest = easytier.PortForwardRequest
+type InstanceSelector = easytier.InstanceSelector
+
 type Type struct {
 	Type         string   `json:"type"`
 	Enabled      bool     `json:"enabled"`
@@ -158,4 +168,32 @@ func (s *Service) Read(ctx context.Context, name, resourceID, capability string)
 		return nil, ErrDisabled
 	}
 	return driver.Read(ctx, resourceID, capability)
+}
+
+func (s *Service) PortForwards(ctx context.Context, resourceID string, selector InstanceSelector) (json.RawMessage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.enabled["easytier"] {
+		return nil, ErrDisabled
+	}
+	driver, ok := s.drivers["easytier"].(PortForwardDriver)
+	if !ok {
+		return nil, ErrUnknown
+	}
+	return driver.ListPortForwards(ctx, resourceID, selector)
+}
+
+func (s *Service) ModifyPortForward(ctx context.Context, req PortForwardRequest, action string) error {
+	// Keep the gate locked until the mutation completes. Once Set(false) returns,
+	// no previously admitted mutation remains in flight.
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.enabled["easytier"] {
+		return ErrDisabled
+	}
+	driver, ok := s.drivers["easytier"].(PortForwardDriver)
+	if !ok {
+		return ErrUnknown
+	}
+	return driver.ModifyPortForward(ctx, req, action)
 }

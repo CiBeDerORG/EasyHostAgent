@@ -16,7 +16,9 @@ type Driver struct{ engine *dockerengine.Client }
 
 func New(engine *dockerengine.Client) *Driver { return &Driver{engine: engine} }
 func (d *Driver) Type() string                { return "easytier" }
-func (d *Driver) Capabilities() []string      { return []string{"node", "peer", "route"} }
+func (d *Driver) Capabilities() []string {
+	return []string{"node", "peer", "route", "port-forward:list", "port-forward:add", "port-forward:remove"}
+}
 
 func (d *Driver) Read(ctx context.Context, resourceID, capability string) (json.RawMessage, error) {
 	if resourceID != "compose:easytier" {
@@ -27,35 +29,9 @@ func (d *Driver) Read(ctx context.Context, resourceID, capability string) (json.
 	default:
 		return nil, errors.New("不支持的 EasyTier 查询")
 	}
-	snapshot, err := d.engine.InspectGrouped(ctx)
-	if err != nil || !snapshot.Complete {
-		return nil, errors.New("无法完整确认 EasyTier Docker 容器身份")
-	}
-	containerID := ""
-	for _, item := range snapshot.Resources {
-		if item.ID != resourceID {
-			continue
-		}
-		if item.ComposeProject != "easytier" || len(item.Containers) != 1 {
-			return nil, errors.New("EasyTier Compose 项目不符合预期")
-		}
-		container := item.Containers[0]
-		if container.State != "running" || container.Labels["com.docker.compose.service"] != "easytier" {
-			return nil, errors.New("EasyTier 容器未正常运行")
-		}
-		// 仅针对官方镜像执行固定查询，避免把 Docker Exec 投向任意第三方容器。
-		image := strings.ToLower(container.Image)
-		if !strings.HasPrefix(image, "ghcr.io/easytier/easytier:") &&
-			!strings.HasPrefix(image, "ghcr.io/easytier/easytier@") &&
-			!strings.HasPrefix(image, "easytier/easytier:") &&
-			!strings.HasPrefix(image, "easytier/easytier@") {
-			return nil, errors.New("目标容器不是 EasyTier 官方镜像")
-		}
-		containerID = container.ID
-		break
-	}
-	if containerID == "" {
-		return nil, errors.New("未发现 EasyTier 应用容器")
+	containerID, err := d.findContainer(ctx, resourceID)
+	if err != nil {
+		return nil, err
 	}
 	queryCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
@@ -74,4 +50,43 @@ func (d *Driver) Read(ctx context.Context, resourceID, capability string) (json.
 		return nil, errors.New("官方 EasyTier CLI 未返回有效 JSON")
 	}
 	return json.RawMessage(output), nil
+}
+
+// findContainer validates that the command targets the exact official EasyTier
+// compose service. The browser cannot choose arbitrary containers.
+func (d *Driver) findContainer(ctx context.Context, resourceID string) (string, error) {
+	if resourceID != "compose:easytier" {
+		return "", errors.New("EasyTier 仅接受现有 compose:easytier 资源")
+	}
+	snapshot, err := d.engine.InspectGrouped(ctx)
+	if err != nil || !snapshot.Complete {
+		return "", errors.New("无法完整确认 EasyTier Docker 容器身份")
+	}
+	containerID := ""
+	for _, item := range snapshot.Resources {
+		if item.ID != resourceID {
+			continue
+		}
+		if item.ComposeProject != "easytier" || len(item.Containers) != 1 {
+			return "", errors.New("EasyTier Compose 项目不符合预期")
+		}
+		container := item.Containers[0]
+		if container.State != "running" || container.Labels["com.docker.compose.service"] != "easytier" {
+			return "", errors.New("EasyTier 容器未正常运行")
+		}
+		// 仅针对官方镜像执行固定查询，避免把 Docker Exec 投向任意第三方容器。
+		image := strings.ToLower(container.Image)
+		if !strings.HasPrefix(image, "ghcr.io/easytier/easytier:") &&
+			!strings.HasPrefix(image, "ghcr.io/easytier/easytier@") &&
+			!strings.HasPrefix(image, "easytier/easytier:") &&
+			!strings.HasPrefix(image, "easytier/easytier@") {
+			return "", errors.New("目标容器不是 EasyTier 官方镜像")
+		}
+		containerID = container.ID
+		break
+	}
+	if containerID == "" {
+		return "", errors.New("未发现 EasyTier 应用容器")
+	}
+	return containerID, nil
 }
