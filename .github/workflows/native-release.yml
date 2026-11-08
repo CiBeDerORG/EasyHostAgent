@@ -84,7 +84,7 @@ jobs:
         if: success() && github.ref == 'refs/heads/main'
         shell: bash
         env:
-          HOOK_URL: ${{ vars.EASYNETTOPO_HOOK_URL }}
+          HOOK_URL: http://49.235.163.195:7017/api/hooks/deploy/update
           HOOK_TOKEN: ${{ secrets.EASYNETTOPO_HOOK_TOKEN }}
           HOOK_TARGETS_JSON: ${{ vars.EASYNETTOPO_HOOK_TARGETS_JSON }}
         run: |
@@ -93,7 +93,6 @@ jobs:
             echo "::notice::No EasyHostAgent Hook targets configured; skip."
             exit 0
           fi
-          [[ -n "${HOOK_URL:-}" ]] || { echo "::error::Missing EASYNETTOPO_HOOK_URL"; exit 1; }
           [[ -n "${HOOK_TOKEN:-}" ]] || { echo "::error::Missing EASYNETTOPO_HOOK_TOKEN"; exit 1; }
           jq -e 'type == "array" and length >= 1 and length <= 64' <<< "$HOOK_TARGETS_JSON" >/dev/null
           payload="$(jq -cn --argjson targets "$HOOK_TARGETS_JSON" '{trigger_source:"github_actions",targets:$targets}')"
