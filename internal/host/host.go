@@ -49,15 +49,15 @@ type Docker struct {
 	Error            string `json:"error,omitempty"`
 }
 type Snapshot struct {
-	AgentID    string `json:"agent_id"`
-	StartedAt  string `json:"agent_started_at"`
-	AgentCommit string `json:"agent_commit"`
+	AgentID      string `json:"agent_id"`
+	StartedAt    string `json:"agent_started_at"`
+	AgentCommit  string `json:"agent_commit"`
 	AgentVersion string `json:"agent_version"`
-	ObservedAt string `json:"observed_at"`
-	Hostname   string `json:"hostname"`
-	Platform   string `json:"platform"`
-	Arch       string `json:"arch"`
-	CPU        struct {
+	ObservedAt   string `json:"observed_at"`
+	Hostname     string `json:"hostname"`
+	Platform     string `json:"platform"`
+	Arch         string `json:"arch"`
+	CPU          struct {
 		LogicalCores int `json:"logical_cores"`
 	} `json:"cpu"`
 	Memory struct {
