@@ -201,9 +201,21 @@ func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owne
 	checkOutput, checkErr := check.CombinedOutput()
 	checkCancel()
 	if checkErr == nil {
-		// 同名任务已经排队或正在执行；不再创建第二个更新进程。
-		_ = checkOutput
-		return nil
+		// 同名任务仍在排队或执行时合并请求；已退出的残留标签先清理再提交。
+		state := string(checkOutput)
+		if strings.Contains(state, "state = running") ||
+			strings.Contains(state, "state = waiting") ||
+			strings.Contains(state, "pid =") {
+			return nil
+		}
+		removeCtx, removeCancel := context.WithTimeout(ctx, 2*time.Second)
+		remove := exec.CommandContext(removeCtx, runner, "remove", label)
+		removeOutput, removeErr := remove.CombinedOutput()
+		removeCancel()
+		if removeErr != nil {
+			return fmt.Errorf("%w: launchd 中存在已退出的旧更新标签且无法清理：%v；输出：%s",
+				ErrNativeUpdateUnavailable, removeErr, strings.TrimSpace(string(removeOutput)))
+		}
 	}
 	if ctx.Err() != nil {
 		return fmt.Errorf("%w: 检查现有 launchd 更新任务时上下文已取消: %v", ErrNativeUpdateUnavailable, ctx.Err())
@@ -211,13 +223,18 @@ func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owne
 
 	stdoutPath := filepath.Join(stateDir, "easyhostagent-update.stdout.log")
 	stderrPath := filepath.Join(stateDir, "easyhostagent-update.stderr.log")
-	for _, path := range []string{stdoutPath, stderrPath, filepath.Join(stateDir, "easyhostagent-update.log")} {
+	lockPath := filepath.Join(stateDir, "easyhostagent.macos-update.lock")
+	for _, path := range []string{stdoutPath, stderrPath, filepath.Join(stateDir, "easyhostagent-update.log"), lockPath} {
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_NOFOLLOW, 0600)
 		if err != nil {
 			return fmt.Errorf("%w: 无法创建更新日志 %s: %v", ErrNativeUpdateUnavailable, path, err)
 		}
+		if err := f.Chmod(0600); err != nil {
+			_ = f.Close()
+			return fmt.Errorf("%w: 无法设置更新状态文件权限 %s: %v", ErrNativeUpdateUnavailable, path, err)
+		}
 		if err := f.Close(); err != nil {
-			return fmt.Errorf("%w: 无法关闭更新日志 %s: %v", ErrNativeUpdateUnavailable, path, err)
+			return fmt.Errorf("%w: 无法关闭更新状态文件 %s: %v", ErrNativeUpdateUnavailable, path, err)
 		}
 		if err := validateNativePath(path, false, root, "macos", owner); err != nil {
 			return err
