@@ -205,7 +205,7 @@ func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owne
 		state := string(checkOutput)
 		if strings.Contains(state, "state = running") ||
 			strings.Contains(state, "state = waiting") ||
-			strings.Contains(state, "pid =") {
+			strings.Contains(state, "state = spawn scheduled") {
 			return nil
 		}
 		removeCtx, removeCancel := context.WithTimeout(ctx, 2*time.Second)
