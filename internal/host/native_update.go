@@ -2,8 +2,6 @@ package host
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -167,10 +165,9 @@ func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owne
 			return err
 		}
 	}
-	// 老版 macOS 安装器未必创建 state；仅在根目录校验后创建固定目录。
 	stateDir := filepath.Join(root, "deploy", "state")
 	if err := os.Mkdir(stateDir, 0700); err != nil && !os.IsExist(err) {
-		return fmt.Errorf("%w: 无法建立受控更新状态目录", ErrNativeUpdateUnavailable)
+		return fmt.Errorf("%w: 无法建立受控更新状态目录: %v", ErrNativeUpdateUnavailable, err)
 	}
 	if err := validateNativePath(stateDir, true, root, "macos", owner); err != nil {
 		return err
@@ -192,30 +189,86 @@ func queueMacNativeUpdate(ctx context.Context, root, action, runner string, owne
 			return err
 		}
 	}
-	// launchctl submit 自动重试非零退出的任务；包装层即使下载失败也以零退出，
-	// 让控制端判定更新未成功，而不是无限重复执行可能有副作用的更新。
-	var nonce [8]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return ErrNativeUpdateUnavailable
-	}
 	if !filepath.IsAbs(runner) {
 		return ErrNativeUpdateUnavailable
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+
+	// 固定任务名可合并重复触发，避免每次请求都创建一个新的 launchd 任务。
+	const label = "org.cibeder.easyhostagent-self-update"
+	domain := fmt.Sprintf("gui/%d/%s", owner, label)
+	checkCtx, checkCancel := context.WithTimeout(ctx, 2*time.Second)
+	check := exec.CommandContext(checkCtx, runner, "print", domain)
+	checkOutput, checkErr := check.CombinedOutput()
+	checkCancel()
+	if checkErr == nil {
+		// 同名任务已经排队或正在执行；不再创建第二个更新进程。
+		_ = checkOutput
+		return nil
+	}
+	if ctx.Err() != nil {
+		return fmt.Errorf("%w: 检查现有 launchd 更新任务时上下文已取消: %v", ErrNativeUpdateUnavailable, ctx.Err())
+	}
+
+	stdoutPath := filepath.Join(stateDir, "easyhostagent-update.stdout.log")
+	stderrPath := filepath.Join(stateDir, "easyhostagent-update.stderr.log")
+	for _, path := range []string{stdoutPath, stderrPath, filepath.Join(stateDir, "easyhostagent-update.log")} {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_NOFOLLOW, 0600)
+		if err != nil {
+			return fmt.Errorf("%w: 无法创建更新日志 %s: %v", ErrNativeUpdateUnavailable, path, err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("%w: 无法关闭更新日志 %s: %v", ErrNativeUpdateUnavailable, path, err)
+		}
+		if err := validateNativePath(path, false, root, "macos", owner); err != nil {
+			return err
+		}
+	}
+
+	// 更新任务自行持有同一把锁；脚本内也会识别锁已持有，避免嵌套抢锁。
+	// 结束时清理固定 launchd 标签，下一次更新请求才能重新提交。
+	wrapper := `set -u
+label="$1"
+root="$2"
+action="$3"
+log_file="$root/deploy/state/easyhostagent-update.log"
+log_line() {
+  printf '[%s] pid=%s %s\n' "$(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ')" "$$" "$*" >> "$log_file"
+}
+cleanup() {
+  /bin/launchctl remove "$label" >/dev/null 2>&1 || true
+  log_line "更新任务结束，已请求清理 launchd 标签"
+}
+trap cleanup EXIT
+log_line "更新任务开始 action=$action"
+if /usr/bin/lockf -k -t 300 "$root/deploy/state/easyhostagent.macos-update.lock" /usr/bin/env EASYHOSTAGENT_UPDATE_LOCK_HELD=1 /bin/bash "$root/deploy/macos/agent-install.sh" "$action" "$root"; then
+  log_line "更新任务完成 exit=0"
+else
+  status=$?
+  log_line "更新任务失败 exit=$status"
+fi
+exit 0`
+	commandCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, runner, "submit",
-		"-l", "org.cibeder.easyhostagent-self-update."+hex.EncodeToString(nonce[:]),
-		"-o", filepath.Join(root, "deploy", "state", "easyhostagent-update.stdout.log"),
-		"-e", filepath.Join(root, "deploy", "state", "easyhostagent-update.stderr.log"),
-		"--", "/bin/bash", "-c",
-		`sleep 5; /usr/bin/lockf -t 0 "$1/deploy/state/easyhostagent.macos-update.lock" /bin/bash "$1/deploy/macos/agent-install.sh" "$2" "$1"; exit 0`,
-		"easyhostagent-self-update", root, action)
+	cmd := exec.CommandContext(commandCtx, runner, "submit",
+		"-l", label, "-o", stdoutPath, "-e", stderrPath,
+		"--", "/bin/bash", "-c", wrapper,
+		"easyhostagent-self-update", label, root, action)
 	cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}
 	if home, err := os.UserHomeDir(); err == nil {
 		cmd.Env = append(cmd.Env, "HOME="+home)
 	}
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%w: launchctl 无法提交原生更新任务: %v", ErrNativeUpdateUnavailable, err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// 并发请求可能在检查后、提交前抢先创建固定标签；确认已存在则视为成功合并。
+		raceCtx, raceCancel := context.WithTimeout(ctx, 2*time.Second)
+		race := exec.CommandContext(raceCtx, runner, "print", domain)
+		_, raceErr := race.CombinedOutput()
+		raceCancel()
+		if raceErr == nil {
+			return nil
+		}
+		return fmt.Errorf("%w: launchctl 提交原生更新任务失败（label=%s）：%v；输出：%s",
+			ErrNativeUpdateUnavailable, label, err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }

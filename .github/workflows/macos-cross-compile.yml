@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/macos-native-phase1-20261106
+      - fix/macos-launchagent-startup-20261109
     paths:
       - "cmd/**"
       - "internal/**"

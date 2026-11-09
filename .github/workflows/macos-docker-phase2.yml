@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feat/macos-docker-phase2-20261106
+      - fix/macos-launchagent-startup-20261109
   pull_request:
     paths:
       - "internal/**"

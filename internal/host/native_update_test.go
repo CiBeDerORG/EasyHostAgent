@@ -149,8 +149,8 @@ func TestNativeUpdateRejectsGroupWritableDirectory(t *testing.T) {
 	}
 }
 
-func TestMacNativeUpdateUsesDetachedLaunchdAndRelease(t *testing.T) {
-	root, runner, result, _ := nativeUpdateFixture(t)
+func TestMacNativeUpdateUsesStableDetachedLaunchdJob(t *testing.T) {
+	root, _, result, _ := nativeUpdateFixture(t)
 	for _, dir := range []string{
 		filepath.Join(root, "deploy", "macos"),
 		filepath.Join(root, "deploy", "state"),
@@ -171,20 +171,41 @@ func TestMacNativeUpdateUsesDetachedLaunchdAndRelease(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, action := range []string{"update", "force-update"} {
-		if err := queueMacNativeUpdate(context.Background(), root, action, runner, uint32(os.Geteuid())); err != nil {
-			t.Fatal(err)
+	active := filepath.Join(t.TempDir(), "active")
+	runner := filepath.Join(t.TempDir(), "launchctl")
+	body := "#!/bin/sh\n" +
+		"if [ \"$1\" = print ]; then [ -f '" + active + "' ] && exit 0 || exit 113; fi\n" +
+		"if [ \"$1\" = submit ]; then touch '" + active + "'; printf '%s\\n' \"$@\" > '" + result + "'; exit 0; fi\n" +
+		"exit 2\n"
+	if err := os.WriteFile(runner, []byte(body), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := queueMacNativeUpdate(context.Background(), root, "update", runner, uint32(os.Geteuid())); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"submit", "-l", "org.cibeder.easyhostagent-self-update",
+		"lockf", "-t 300", "EASYHOSTAGENT_UPDATE_LOCK_HELD=1",
+		"agent-install.sh", "easyhostagent.macos-update.lock", "update",
+	} {
+		if !strings.Contains(string(data), expected) {
+			t.Fatalf("macOS 固定更新任务缺少 %q: %s", expected, data)
 		}
-		data, err := os.ReadFile(result)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, expected := range []string{"submit", "org.cibeder.easyhostagent-self-update.", "sleep 5",
-			"agent-install.sh", "lockf", root, action} {
-			if !strings.Contains(string(data), expected) {
-				t.Fatalf("macOS launchd update missing %q: %s", expected, data)
-			}
-		}
+	}
+	// 同一固定标签已经存在时，后续触发直接合并，不再提交第二个任务。
+	if err := queueMacNativeUpdate(context.Background(), root, "force-update", runner, uint32(os.Geteuid())); err != nil {
+		t.Fatal(err)
+	}
+	again, err := os.ReadFile(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(again) != string(data) {
+		t.Fatalf("已有更新任务时不应再次提交：before=%s after=%s", data, again)
 	}
 	if err := queueMacNativeUpdate(context.Background(), root, "uninstall", runner, uint32(os.Geteuid())); !errors.Is(err, ErrNativeUpdateUnavailable) {
 		t.Fatalf("unexpected uninstall acceptance: %v", err)
