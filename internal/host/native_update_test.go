@@ -174,7 +174,7 @@ func TestMacNativeUpdateUsesStableDetachedLaunchdJob(t *testing.T) {
 	active := filepath.Join(t.TempDir(), "active")
 	runner := filepath.Join(t.TempDir(), "launchctl")
 	body := "#!/bin/sh\n" +
-		"if [ \"$1\" = print ]; then [ -f '" + active + "' ] && exit 0 || exit 113; fi\n" +
+		"if [ \"$1\" = print ]; then if [ -f '" + active + "' ]; then echo 'state = running'; exit 0; else exit 113; fi; fi\n" +
 		"if [ \"$1\" = submit ]; then touch '" + active + "'; printf '%s\\n' \"$@\" > '" + result + "'; exit 0; fi\n" +
 		"exit 2\n"
 	if err := os.WriteFile(runner, []byte(body), 0700); err != nil {
