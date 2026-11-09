@@ -189,7 +189,7 @@ func TestMacNativeUpdateUsesStableDetachedLaunchdJob(t *testing.T) {
 	}
 	for _, expected := range []string{
 		"submit", "-l", "org.cibeder.easyhostagent-self-update",
-		"lockf", "-t 300", "EASYHOSTAGENT_UPDATE_LOCK_HELD=1",
+		"lockf", "-t", "300", "EASYHOSTAGENT_UPDATE_LOCK_HELD=1",
 		"agent-install.sh", "easyhostagent.macos-update.lock", "update",
 	} {
 		if !strings.Contains(string(data), expected) {
