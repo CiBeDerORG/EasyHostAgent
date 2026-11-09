@@ -500,7 +500,10 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	// 脚本和容器输出可能含初始化凭据；只返回固定原因及退出码。
+	// 脚本输出仅保留有界内存尾部；失败时提取可安全展示的实际错误。
+	var stdout, stderr scriptErrorTail
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	var err error
 	if authorized() {
 		err = cmd.Run()
@@ -513,7 +516,7 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 		rec.Message = "执行失败，请检查主机的运行环境"
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
-			rec.Message = fmt.Sprintf("脚本退出码 %d", exit.ExitCode())
+			rec.Message = scriptFailureMessage(exit.ExitCode(), stderr.String(), stdout.String(), values)
 		}
 		if ctx.Err() != nil {
 			rec.Message = "操作超时或 Agent 已停止"
