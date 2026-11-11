@@ -17,7 +17,7 @@ type Driver struct{ engine *dockerengine.Client }
 func New(engine *dockerengine.Client) *Driver { return &Driver{engine: engine} }
 func (d *Driver) Type() string                { return "easytier" }
 func (d *Driver) Capabilities() []string {
-	return []string{"node", "peer", "route", "port-forward:list", "port-forward:add", "port-forward:remove"}
+	return []string{"node", "peer", "route", "peer-center", "port-forward:list", "port-forward:add", "port-forward:remove"}
 }
 
 func (d *Driver) Read(ctx context.Context, resourceID, capability string) (json.RawMessage, error) {
@@ -25,7 +25,7 @@ func (d *Driver) Read(ctx context.Context, resourceID, capability string) (json.
 		return nil, errors.New("EasyTier 仅接受现有 compose:easytier 资源")
 	}
 	switch capability {
-	case "node", "peer", "route":
+	case "node", "peer", "route", "peer-center":
 	default:
 		return nil, errors.New("不支持的 EasyTier 查询")
 	}
