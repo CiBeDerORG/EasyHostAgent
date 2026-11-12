@@ -90,6 +90,7 @@ func (c *client) endpoint(path string) string {
 func (c *client) run(ctx context.Context) {
 	c.logger.Info("reverse_agent_start", "controller", c.cfg.ControllerURL, "agent_id", c.identity.AgentID)
 	failures := 0
+	lastReport := time.Time{}
 	for ctx.Err() == nil {
 		cred, err := c.loadCredential()
 		if err != nil {
@@ -112,6 +113,7 @@ func (c *client) run(ctx context.Context) {
 					c.logger.Error("reverse_credential_save_failed", "error", err)
 					return
 				}
+				lastReport = time.Time{}
 				c.logger.Info("reverse_agent_accepted", "controller_id", reply.ControllerID)
 				continue
 			}
@@ -122,8 +124,10 @@ func (c *client) run(ctx context.Context) {
 			continue
 		}
 
-		reply, status, err := c.poll(ctx, cred)
+		fullReport := lastReport.IsZero() || time.Since(lastReport) >= 10*time.Minute
+		reply, status, err := c.poll(ctx, cred, fullReport)
 		if err != nil {
+			lastReport = time.Time{}
 			if status == http.StatusGone {
 				c.logger.Info("reverse_temporary_host_expired", "agent_id", c.identity.AgentID)
 				return
@@ -135,6 +139,7 @@ func (c *client) run(ctx context.Context) {
 					return
 				}
 				failures = 0
+				lastReport = time.Time{}
 				continue
 			}
 			failures++
@@ -145,6 +150,9 @@ func (c *client) run(ctx context.Context) {
 			continue
 		}
 		failures = 0
+		if fullReport {
+			lastReport = time.Now()
+		}
 		if reply.Status != "accepted" {
 			c.logger.Warn("reverse_poll_rejected", "status", reply.Status)
 			if !sleep(ctx, 30*time.Second) {
@@ -182,9 +190,18 @@ func (c *client) discover(ctx context.Context) (discoveryReply, error) {
 	return reply, nil
 }
 
-func (c *client) poll(ctx context.Context, cred credentials) (pollReply, int, error) {
+func (c *client) poll(ctx context.Context, cred credentials, fullReport bool) (pollReply, int, error) {
 	var reply pollReply
-	status, err := c.post(ctx, "/api/v1/agent/poll", cred.Token, map[string]string{"agent_id": c.identity.AgentID}, &reply)
+	payload := map[string]any{"agent_id": c.identity.AgentID, "report": fullReport}
+	if fullReport {
+		payload["hostname"] = hostname()
+		payload["spki_sha256"] = c.identity.SPKISHA256
+		payload["platform"] = c.cfg.Platform
+		payload["arch"] = runtimeArch()
+		payload["version"] = c.version
+		payload["certificate_der"] = c.certDER
+	}
+	status, err := c.post(ctx, "/api/v1/agent/poll", cred.Token, payload, &reply)
 	if err != nil {
 		return reply, status, fmt.Errorf("轮询请求 HTTP %d: %w", status, err)
 	}
