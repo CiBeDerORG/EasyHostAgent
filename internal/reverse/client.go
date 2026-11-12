@@ -19,8 +19,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CiBeDerORG/EasyHostAgent/internal/bundles"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
 )
 
 const credentialFileName = "reverse-credential.json"
@@ -42,20 +44,22 @@ type pollReply struct {
 	ExpiresAt   string          `json:"expires_at"`
 	NextPollAt  string          `json:"next_poll_at"`
 	NextPoll    int             `json:"next_poll_seconds"`
-	Task        json.RawMessage `json:"task"`
+	Task        *reverseTask `json:"task"`
 }
 
 type client struct {
 	cfg       config.Config
 	identity  identity.State
 	version   string
+	apps      *market.Service
+	bundles   *bundles.Store
 	logger    *slog.Logger
 	http      *http.Client
 	certDER   string
 	credential string
 }
 
-func Start(ctx context.Context, cfg config.Config, state identity.State, version string, logger *slog.Logger) {
+func Start(ctx context.Context, cfg config.Config, state identity.State, version string, apps *market.Service, bundleStore *bundles.Store, logger *slog.Logger) {
 	if cfg.ControllerURL == "" || cfg.DiscoveryToken == "" {
 		return
 	}
@@ -63,7 +67,7 @@ func Start(ctx context.Context, cfg config.Config, state identity.State, version
 		logger = slog.Default()
 	}
 	c := &client{
-		cfg: cfg, identity: state, version: version, logger: logger,
+		cfg: cfg, identity: state, version: version, apps: apps, bundles: bundleStore, logger: logger,
 		http: &http.Client{
 			Timeout: 12 * time.Second,
 			Transport: &http.Transport{
@@ -147,7 +151,15 @@ func (c *client) run(ctx context.Context) {
 			}
 			continue
 		}
-		// 任务处理在任务通道阶段扩展；空闲轮询保持轻量。
+		if reply.Task != nil {
+			if err := c.processTask(ctx, cred, *reply.Task); err != nil {
+				c.logger.Warn("reverse_task_processing_failed", "task_id", reply.Task.ID, "error", err)
+				if !sleep(ctx, 3*time.Second) {
+					return
+				}
+			}
+			continue
+		}
 		if !sleep(ctx, seconds(reply.NextPoll, 10)) {
 			return
 		}
