@@ -14,8 +14,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"runtime"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -33,29 +33,29 @@ type credentials struct {
 }
 
 type discoveryReply struct {
-	Status        string `json:"status"`
-	ControllerID  string `json:"controller_id"`
-	AgentToken    string `json:"agent_token"`
-	NextPoll      int    `json:"next_poll_seconds"`
+	Status       string `json:"status"`
+	ControllerID string `json:"controller_id"`
+	AgentToken   string `json:"agent_token"`
+	NextPoll     int    `json:"next_poll_seconds"`
 }
 
 type pollReply struct {
-	Status      string          `json:"status"`
-	ExpiresAt   string          `json:"expires_at"`
-	NextPollAt  string          `json:"next_poll_at"`
-	NextPoll    int             `json:"next_poll_seconds"`
-	Task        *reverseTask `json:"task"`
+	Status     string       `json:"status"`
+	ExpiresAt  string       `json:"expires_at"`
+	NextPollAt string       `json:"next_poll_at"`
+	NextPoll   int          `json:"next_poll_seconds"`
+	Task       *reverseTask `json:"task"`
 }
 
 type client struct {
-	cfg       config.Config
-	identity  identity.State
-	version   string
-	apps      *market.Service
-	bundles   *bundles.Store
-	logger    *slog.Logger
-	http      *http.Client
-	certDER   string
+	cfg        config.Config
+	identity   identity.State
+	version    string
+	apps       *market.Service
+	bundles    *bundles.Store
+	logger     *slog.Logger
+	http       *http.Client
+	certDER    string
 	credential string
 }
 
@@ -71,13 +71,13 @@ func Start(ctx context.Context, cfg config.Config, state identity.State, version
 		http: &http.Client{
 			Timeout: 12 * time.Second,
 			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
+				Proxy:           http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-				MaxIdleConns: 2, IdleConnTimeout: 30 * time.Second,
+				MaxIdleConns:    2, IdleConnTimeout: 30 * time.Second,
 			},
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		certDER: base64.StdEncoding.EncodeToString(state.Certificate.Certificate[0]),
+		certDER:    base64.StdEncoding.EncodeToString(state.Certificate.Certificate[0]),
 		credential: filepath.Join(cfg.DataDir, credentialFileName),
 	}
 	go c.run(ctx)
