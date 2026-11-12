@@ -1,0 +1,334 @@
+// Package reverse maintains an outbound HTTPS control channel for hosts behind NAT.
+// It intentionally uses short requests and does not expose a new inbound listener.
+package reverse
+
+import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
+)
+
+const credentialFileName = "reverse-credential.json"
+
+type credentials struct {
+	ControllerID string `json:"controller_id"`
+	Token        string `json:"token"`
+}
+
+type discoveryReply struct {
+	Status        string `json:"status"`
+	ControllerID  string `json:"controller_id"`
+	AgentToken    string `json:"agent_token"`
+	NextPoll      int    `json:"next_poll_seconds"`
+}
+
+type pollReply struct {
+	Status      string          `json:"status"`
+	ExpiresAt   string          `json:"expires_at"`
+	NextPollAt  string          `json:"next_poll_at"`
+	NextPoll    int             `json:"next_poll_seconds"`
+	Task        json.RawMessage `json:"task"`
+}
+
+type client struct {
+	cfg       config.Config
+	identity  identity.State
+	version   string
+	logger    *slog.Logger
+	http      *http.Client
+	certDER   string
+	credential string
+}
+
+func Start(ctx context.Context, cfg config.Config, state identity.State, version string, logger *slog.Logger) {
+	if cfg.ControllerURL == "" || cfg.DiscoveryToken == "" {
+		return
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	c := &client{
+		cfg: cfg, identity: state, version: version, logger: logger,
+		http: &http.Client{
+			Timeout: 12 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+				MaxIdleConns: 2, IdleConnTimeout: 30 * time.Second,
+			},
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+		},
+		certDER: base64.StdEncoding.EncodeToString(state.Certificate.Certificate[0]),
+		credential: filepath.Join(cfg.DataDir, credentialFileName),
+	}
+	go c.run(ctx)
+}
+
+func (c *client) endpoint(path string) string {
+	return strings.TrimRight(c.cfg.ControllerURL, "/") + path
+}
+
+func (c *client) run(ctx context.Context) {
+	c.logger.Info("reverse_agent_start", "controller", c.cfg.ControllerURL, "agent_id", c.identity.AgentID)
+	failures := 0
+	for ctx.Err() == nil {
+		cred, err := c.loadCredential()
+		if err != nil {
+			c.logger.Error("reverse_credential_unavailable", "error", err)
+			return
+		}
+		if cred.Token == "" {
+			reply, err := c.discover(ctx)
+			if err != nil {
+				failures++
+				c.logger.Warn("reverse_discovery_failed", "attempt", failures, "error", err)
+				if !sleep(ctx, retryDelay(failures)) {
+					return
+				}
+				continue
+			}
+			failures = 0
+			if reply.Status == "accepted" && reply.AgentToken != "" && reply.ControllerID != "" {
+				if err := c.saveCredential(credentials{ControllerID: reply.ControllerID, Token: reply.AgentToken}); err != nil {
+					c.logger.Error("reverse_credential_save_failed", "error", err)
+					return
+				}
+				c.logger.Info("reverse_agent_accepted", "controller_id", reply.ControllerID)
+				continue
+			}
+			wait := seconds(reply.NextPoll, 10)
+			if !sleep(ctx, wait) {
+				return
+			}
+			continue
+		}
+
+		reply, status, err := c.poll(ctx, cred)
+		if err != nil {
+			if status == http.StatusGone {
+				c.logger.Info("reverse_temporary_host_expired", "agent_id", c.identity.AgentID)
+				return
+			}
+			if status == http.StatusUnauthorized {
+				c.logger.Warn("reverse_token_rejected", "agent_id", c.identity.AgentID)
+				if clearErr := c.clearCredential(); clearErr != nil {
+					c.logger.Error("reverse_credential_clear_failed", "error", clearErr)
+					return
+				}
+				failures = 0
+				continue
+			}
+			failures++
+			c.logger.Warn("reverse_poll_failed", "attempt", failures, "error", err)
+			if !sleep(ctx, retryDelay(failures)) {
+				return
+			}
+			continue
+		}
+		failures = 0
+		if reply.Status != "accepted" {
+			c.logger.Warn("reverse_poll_rejected", "status", reply.Status)
+			if !sleep(ctx, 30*time.Second) {
+				return
+			}
+			continue
+		}
+		// 任务处理在任务通道阶段扩展；空闲轮询保持轻量。
+		if !sleep(ctx, seconds(reply.NextPoll, 10)) {
+			return
+		}
+	}
+	c.logger.Info("reverse_agent_stop", "agent_id", c.identity.AgentID)
+}
+
+func (c *client) discover(ctx context.Context) (discoveryReply, error) {
+	payload := map[string]string{
+		"agent_id": c.identity.AgentID, "hostname": hostname(),
+		"spki_sha256": c.identity.SPKISHA256, "platform": c.cfg.Platform,
+		"arch": runtimeArch(), "version": c.version, "certificate_der": c.certDER,
+	}
+	var reply discoveryReply
+	status, err := c.post(ctx, "/api/v1/agent/discovery", c.cfg.DiscoveryToken, payload, &reply)
+	if err != nil {
+		return reply, fmt.Errorf("发现请求 HTTP %d: %w", status, err)
+	}
+	return reply, nil
+}
+
+func (c *client) poll(ctx context.Context, cred credentials) (pollReply, int, error) {
+	var reply pollReply
+	status, err := c.post(ctx, "/api/v1/agent/poll", cred.Token, map[string]string{"agent_id": c.identity.AgentID}, &reply)
+	if err != nil {
+		return reply, status, fmt.Errorf("轮询请求 HTTP %d: %w", status, err)
+	}
+	return reply, status, nil
+}
+
+func (c *client) post(ctx context.Context, path, token string, payload, target any) (int, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint(path), bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return resp.StatusCode, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var apiError struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(data, &apiError)
+		if apiError.Code == "" {
+			apiError.Code = http.StatusText(resp.StatusCode)
+		}
+		return resp.StatusCode, errors.New(apiError.Code + ": " + apiError.Message)
+	}
+	if target == nil {
+		return resp.StatusCode, nil
+	}
+	if err := json.Unmarshal(data, target); err != nil {
+		return resp.StatusCode, errors.New("控制端响应格式无效")
+	}
+	return resp.StatusCode, nil
+}
+
+func (c *client) loadCredential() (credentials, error) {
+	info, err := os.Lstat(c.credential)
+	if errors.Is(err, os.ErrNotExist) {
+		return credentials{}, nil
+	}
+	if err != nil {
+		return credentials{}, err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+		return credentials{}, errors.New("反向接入凭据文件权限或类型不安全")
+	}
+	data, err := os.ReadFile(c.credential)
+	if err != nil {
+		return credentials{}, err
+	}
+	var result credentials
+	if err := json.Unmarshal(data, &result); err != nil || len(result.Token) != 64 || result.ControllerID == "" {
+		return credentials{}, errors.New("反向接入凭据文件损坏；拒绝自动重置")
+	}
+	return result, nil
+}
+
+func (c *client) saveCredential(value credentials) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(c.cfg.DataDir, ".reverse-credential-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, c.credential)
+}
+
+func (c *client) clearCredential() error {
+	info, err := os.Lstat(c.credential)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("拒绝删除非普通凭据文件")
+	}
+	return os.Remove(c.credential)
+}
+
+func hostname() string {
+	value, err := os.Hostname()
+	if err != nil || value == "" {
+		return "unknown"
+	}
+	return value
+}
+
+func runtimeArch() string {
+	switch runtime.GOARCH {
+	case "amd64", "arm64":
+		return runtime.GOARCH
+	default:
+		return "other"
+	}
+}
+
+func seconds(value int, fallback int) time.Duration {
+	if value < 1 || value > 300 {
+		value = fallback
+	}
+	return time.Duration(value) * time.Second
+}
+
+func retryDelay(attempt int) time.Duration {
+	switch {
+	case attempt <= 1:
+		return 2 * time.Second
+	case attempt == 2:
+		return 4 * time.Second
+	case attempt == 3:
+		return 8 * time.Second
+	case attempt == 4:
+		return 15 * time.Second
+	default:
+		return 30 * time.Second
+	}
+}
+
+func sleep(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
