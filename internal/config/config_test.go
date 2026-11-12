@@ -133,3 +133,28 @@ func TestFnOSVersionMarkerOnDebianNativeHost(t *testing.T) {
 		t.Fatal("symlink version marker must not be trusted")
 	}
 }
+
+func TestReverseControllerConfiguration(t *testing.T) {
+	token := strings.Repeat("a", 64)
+	cfg, err := FromSources(env(map[string]string{
+		EnvControllerURL: "https://control.example.com",
+		EnvDiscoveryToken: token,
+	}), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ControllerURL != "https://control.example.com" || cfg.DiscoveryToken != token {
+		t.Fatalf("reverse config was not retained: %+v", cfg)
+	}
+	for _, values := range []map[string]string{
+		{EnvControllerURL: "https://control.example.com"},
+		{EnvDiscoveryToken: token},
+		{EnvControllerURL: "http://control.example.com", EnvDiscoveryToken: token},
+		{EnvControllerURL: "https://user:pass@control.example.com", EnvDiscoveryToken: token},
+		{EnvControllerURL: "https://control.example.com", EnvDiscoveryToken: "short"},
+	} {
+		if _, err := FromSources(env(values), "", false); err == nil {
+			t.Errorf("expected reverse configuration validation error for %#v", values)
+		}
+	}
+}
