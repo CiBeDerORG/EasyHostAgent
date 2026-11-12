@@ -34,13 +34,13 @@ const (
 
 // Config holds host settings. DiscoveryToken is sensitive and must never be logged.
 type Config struct {
-	DataDir      string
-	SoftwareRoot string
-	ListenAddr   string
-	Transport    string
-	Platform     string
-	LogLevel     slog.Level
-	ControllerURL string
+	DataDir        string
+	SoftwareRoot   string
+	ListenAddr     string
+	Transport      string
+	Platform       string
+	LogLevel       slog.Level
+	ControllerURL  string
 	DiscoveryToken string
 }
 
