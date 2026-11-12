@@ -80,7 +80,9 @@ func New(controllerURL, token, dir, platform, version string, id identity.State,
 			return nil, errors.New("反向接入密钥文件不是安全的私有普通文件")
 		}
 		raw, err := os.ReadFile(file)
-		if err != nil { return nil, errors.New("无法读取反向接入密钥文件") }
+		if err != nil {
+			return nil, errors.New("无法读取反向接入密钥文件")
+		}
 		token = strings.TrimSpace(string(raw))
 	}
 	if controllerURL == "" && token == "" {
