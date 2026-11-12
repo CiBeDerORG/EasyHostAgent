@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
@@ -31,7 +32,7 @@ const (
 	EnvDiscoveryToken = "EASYHOSTAGENT_DISCOVERY_TOKEN"
 )
 
-// Config holds non-secret values only.
+// Config holds host settings. DiscoveryToken is sensitive and must never be logged.
 type Config struct {
 	DataDir      string
 	SoftwareRoot string
@@ -154,7 +155,7 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	if controllerURL != "" {
 		parsed, parseErr := url.Parse(controllerURL)
 		if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
-			parsed.RawQuery != "" || parsed.Fragment != "" || strings.ContainsAny(controllerURL, "\\r\\n\\x00") {
+			parsed.RawQuery != "" || parsed.Fragment != "" || strings.ContainsAny(controllerURL, "\r\n\x00") {
 			return Config{}, fmt.Errorf("EASYHOSTAGENT_CONTROLLER_URL 必须是无凭据、无查询参数的 HTTPS 地址")
 		}
 		if len(discoveryToken) != 64 {
