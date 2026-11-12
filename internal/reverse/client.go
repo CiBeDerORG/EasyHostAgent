@@ -70,6 +70,19 @@ type record struct {
 }
 
 func New(controllerURL, token, dir, platform, version string, id identity.State, cache *bundles.Store, apps *market.Service, logger *slog.Logger) (*Client, error) {
+	// macOS LaunchAgent 不把接入密钥写入 plist。可从 Agent 私有数据目录读取受限密钥文件。
+	if file := os.Getenv("EASYHOSTAGENT_REVERSE_BOOTSTRAP_TOKEN_FILE"); token == "" && file != "" {
+		if !filepath.IsAbs(file) || filepath.Clean(filepath.Dir(file)) != filepath.Clean(dir) {
+			return nil, errors.New("反向接入密钥文件必须位于 Agent 私有数据目录")
+		}
+		info, err := os.Lstat(file)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 256 {
+			return nil, errors.New("反向接入密钥文件不是安全的私有普通文件")
+		}
+		raw, err := os.ReadFile(file)
+		if err != nil { return nil, errors.New("无法读取反向接入密钥文件") }
+		token = strings.TrimSpace(string(raw))
+	}
 	if controllerURL == "" && token == "" {
 		return nil, nil
 	}
