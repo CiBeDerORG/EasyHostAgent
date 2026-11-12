@@ -17,18 +17,18 @@ import (
 )
 
 const (
-	DefaultDataDir   = "/var/lib/easyhostagent"
-	DefaultLinuxRoot = "/opt/software"
-	DefaultFnOSRoot  = "/vol3/1000/software"
-	DefaultMacOSRoot = "/opt/software"
-	DefaultListen    = "0.0.0.0:7014"
-	EnvTransport     = "EASYHOSTAGENT_TRANSPORT"
-	EnvPlatform      = "EASYHOSTAGENT_PLATFORM"
-	EnvDataDir       = "EASYHOSTAGENT_DATA_DIR"
-	EnvSoftwareRoot  = "EASYHOSTAGENT_SOFTWARE_ROOT"
-	EnvLogLevel      = "EASYHOSTAGENT_LOG_LEVEL"
-	EnvListen        = "EASYHOSTAGENT_LISTEN_ADDRESS"
-	EnvControllerURL = "EASYHOSTAGENT_CONTROLLER_URL"
+	DefaultDataDir    = "/var/lib/easyhostagent"
+	DefaultLinuxRoot  = "/opt/software"
+	DefaultFnOSRoot   = "/vol3/1000/software"
+	DefaultMacOSRoot  = "/opt/software"
+	DefaultListen     = "0.0.0.0:7014"
+	EnvTransport      = "EASYHOSTAGENT_TRANSPORT"
+	EnvPlatform       = "EASYHOSTAGENT_PLATFORM"
+	EnvDataDir        = "EASYHOSTAGENT_DATA_DIR"
+	EnvSoftwareRoot   = "EASYHOSTAGENT_SOFTWARE_ROOT"
+	EnvLogLevel       = "EASYHOSTAGENT_LOG_LEVEL"
+	EnvListen         = "EASYHOSTAGENT_LISTEN_ADDRESS"
+	EnvControllerURL  = "EASYHOSTAGENT_CONTROLLER_URL"
 	EnvDiscoveryToken = "EASYHOSTAGENT_DISCOVERY_TOKEN"
 )
 
