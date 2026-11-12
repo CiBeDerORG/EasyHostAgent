@@ -165,6 +165,10 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 			return Config{}, fmt.Errorf("EASYHOSTAGENT_DISCOVERY_TOKEN 必须是 64 位十六进制")
 		}
 	}
+	// 反向管理不需要公网/局域网入站端口。保持端口，仅收敛到 loopback。
+	if controllerURL != "" {
+		listenAddr = net.JoinHostPort("127.0.0.1", port)
+	}
 	platform := "linux"
 	if isFn {
 		platform = "fnos"
