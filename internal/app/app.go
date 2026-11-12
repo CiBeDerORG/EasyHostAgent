@@ -83,10 +83,14 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	reverseClient, err := reverse.New(
 		os.Getenv("EASYHOSTAGENT_CONTROLLER_URL"),
 		os.Getenv("EASYHOSTAGENT_REVERSE_BOOTSTRAP_TOKEN"),
-		cfg.DataDir,cfg.Platform,buildinfo.Version,state,bundleStore,apps,logger,
+		cfg.DataDir, cfg.Platform, buildinfo.Version, state, bundleStore, apps, logger,
 	)
-	if err != nil { return fmt.Errorf("反向接入配置无效: %w",err) }
-	if reverseClient!=nil { go reverseClient.Run(jobsCtx) }
+	if err != nil {
+		return fmt.Errorf("反向接入配置无效: %w", err)
+	}
+	if reverseClient != nil {
+		go reverseClient.Run(jobsCtx)
+	}
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("%s listen %q: %w", cfg.Transport, cfg.ListenAddr, err)
