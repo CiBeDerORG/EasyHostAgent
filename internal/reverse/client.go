@@ -104,11 +104,7 @@ func(c *Client) call(ctx context.Context,method,path string,request any)(int,[]b
 	nonceText:=hex.EncodeToString(nonce)
 	timestamp:=fmt.Sprint(time.Now().Unix())
 	digest:=sha256.Sum256(data)
-	message:=timestamp+"
-"+nonceText+"
-"+method+"
-"+req.URL.EscapedPath()+"
-"+hex.EncodeToString(digest[:])
+	message:=timestamp+"\n"+nonceText+"\n"+method+"\n"+req.URL.EscapedPath()+"\n"+hex.EncodeToString(digest[:])
 	sum:=sha256.Sum256([]byte(message))
 	private:=c.identity.Certificate.PrivateKey.(*ecdsa.PrivateKey)
 	sig,err:=ecdsa.SignASN1(rand.Reader,private,sum[:])
@@ -161,8 +157,7 @@ func(c *Client) claim(ctx context.Context)(*task,error){
 	return &t,nil
 }
 func(c *Client) path(taskID string) (string,error) {
-	if !strings.HasPrefix(taskID,"AT-") || len(taskID)>80 || strings.ContainsAny(taskID,"/\.
-") {
+	if !strings.HasPrefix(taskID,"AT-") || len(taskID)>80 || strings.ContainsAny(taskID,"/\\.\r\n") {
 		return "",errors.New("非法任务标识")
 	}
 	return filepath.Join(c.recordDir,taskID+".json"),nil
