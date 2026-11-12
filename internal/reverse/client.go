@@ -71,6 +71,7 @@ func Start(ctx context.Context, cfg config.Config, state identity.State, version
 		http: &http.Client{
 			Timeout: 12 * time.Second,
 			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 				MaxIdleConns: 2, IdleConnTimeout: 30 * time.Second,
 			},
