@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,6 +27,8 @@ const (
 	EnvSoftwareRoot  = "EASYHOSTAGENT_SOFTWARE_ROOT"
 	EnvLogLevel      = "EASYHOSTAGENT_LOG_LEVEL"
 	EnvListen        = "EASYHOSTAGENT_LISTEN_ADDRESS"
+	EnvControllerURL = "EASYHOSTAGENT_CONTROLLER_URL"
+	EnvDiscoveryToken = "EASYHOSTAGENT_DISCOVERY_TOKEN"
 )
 
 // Config holds non-secret values only.
@@ -36,6 +39,8 @@ type Config struct {
 	Transport    string
 	Platform     string
 	LogLevel     slog.Level
+	ControllerURL string
+	DiscoveryToken string
 }
 
 func Load() (Config, error) {
@@ -141,13 +146,31 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	if err != nil {
 		return Config{}, err
 	}
+	controllerURL := strings.TrimSpace(getenv(EnvControllerURL))
+	discoveryToken := strings.TrimSpace(getenv(EnvDiscoveryToken))
+	if (controllerURL == "") != (discoveryToken == "") {
+		return Config{}, fmt.Errorf("EASYHOSTAGENT_CONTROLLER_URL 与 EASYHOSTAGENT_DISCOVERY_TOKEN 必须同时配置")
+	}
+	if controllerURL != "" {
+		parsed, parseErr := url.Parse(controllerURL)
+		if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
+			parsed.RawQuery != "" || parsed.Fragment != "" || strings.ContainsAny(controllerURL, "\\r\\n\\x00") {
+			return Config{}, fmt.Errorf("EASYHOSTAGENT_CONTROLLER_URL 必须是无凭据、无查询参数的 HTTPS 地址")
+		}
+		if len(discoveryToken) != 64 {
+			return Config{}, fmt.Errorf("EASYHOSTAGENT_DISCOVERY_TOKEN 必须是 64 位十六进制")
+		}
+		if _, decodeErr := hex.DecodeString(discoveryToken); decodeErr != nil {
+			return Config{}, fmt.Errorf("EASYHOSTAGENT_DISCOVERY_TOKEN 必须是 64 位十六进制")
+		}
+	}
 	platform := "linux"
 	if isFn {
 		platform = "fnos"
 	} else if isMac {
 		platform = "macos"
 	}
-	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level}, nil
+	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level, ControllerURL: controllerURL, DiscoveryToken: discoveryToken}, nil
 }
 
 func cleanAbsolute(label, value string) (string, error) {
