@@ -143,7 +143,7 @@ func TestReverseControllerConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ControllerURL != "https://control.example.com" || cfg.DiscoveryToken != token {
+	if cfg.ControllerURL != "https://control.example.com" || cfg.DiscoveryToken != token || cfg.ListenAddr != "127.0.0.1:7014" {
 		t.Fatalf("reverse config was not retained: %+v", cfg)
 	}
 	for _, values := range []map[string]string{
