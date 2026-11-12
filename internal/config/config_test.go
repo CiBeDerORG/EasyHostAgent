@@ -137,7 +137,7 @@ func TestFnOSVersionMarkerOnDebianNativeHost(t *testing.T) {
 func TestReverseControllerConfiguration(t *testing.T) {
 	token := strings.Repeat("a", 64)
 	cfg, err := FromSources(env(map[string]string{
-		EnvControllerURL: "https://control.example.com",
+		EnvControllerURL:  "https://control.example.com",
 		EnvDiscoveryToken: token,
 	}), "", false)
 	if err != nil {
