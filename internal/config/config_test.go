@@ -146,10 +146,28 @@ func TestReverseControllerConfiguration(t *testing.T) {
 	if cfg.ControllerURL != "https://control.example.com" || cfg.DiscoveryToken != token || cfg.ListenAddr != "127.0.0.1:7014" {
 		t.Fatalf("reverse config was not retained: %+v", cfg)
 	}
+	for _, controllerURL := range []string{
+		"http://control.example.com",
+		"http://192.168.10.2:7017",
+		"https://control.example.com",
+	} {
+		cfg, err := FromSources(env(map[string]string{
+			EnvControllerURL:  controllerURL,
+			EnvDiscoveryToken: token,
+		}), "", false)
+		if err != nil {
+			t.Fatalf("valid reverse URL %q was rejected: %v", controllerURL, err)
+		}
+		if cfg.ControllerURL != controllerURL || cfg.ListenAddr != "127.0.0.1:7014" {
+			t.Fatalf("reverse URL %q was not retained: %+v", controllerURL, cfg)
+		}
+	}
 	for _, values := range []map[string]string{
 		{EnvControllerURL: "https://control.example.com"},
+		{EnvControllerURL: "http://control.example.com"},
 		{EnvDiscoveryToken: token},
-		{EnvControllerURL: "http://control.example.com", EnvDiscoveryToken: token},
+		{EnvControllerURL: "ftp://control.example.com", EnvDiscoveryToken: token},
+		{EnvControllerURL: "http://user:pass@control.example.com", EnvDiscoveryToken: token},
 		{EnvControllerURL: "https://user:pass@control.example.com", EnvDiscoveryToken: token},
 		{EnvControllerURL: "https://control.example.com", EnvDiscoveryToken: "short"},
 	} {
