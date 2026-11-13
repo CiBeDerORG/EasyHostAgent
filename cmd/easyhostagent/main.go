@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,6 +21,7 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/reverse"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/trust"
 )
 
@@ -33,7 +35,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVersion := flags.Bool("version", false, "print build version")
 	checkConfig := flags.Bool("check-config", false, "validate configuration and exit")
 	showIdentity := flags.Bool("identity", false, "show stable Agent ID and TLS public key fingerprint locally")
-	pairingCode := flags.Bool("pairing-code", false, "generate a single-use pairing code from a trusted host terminal")
+	pairingCode := flags.Bool("pairing-code", false, "generate a legacy local pairing code")
+	pair := flags.Bool("pair", false, "accept a one-time EasyNetTopo bootstrap token from stdin")
+	pairStatus := flags.Bool("pair-status", false, "print whether this Agent currently has pairing material")
+	pairReplace := flags.Bool("pair-replace", false, "replace existing local pairing before accepting a new token")
 	approveBundle := flags.String("approve-bundle", "", "locally approve a cached ZIP SHA-256")
 	checkBundle := flags.String("check-bundle", "", "locally verify an approved ZIP SHA-256")
 	revokeBundle := flags.String("revoke-bundle", "", "locally revoke an approved ZIP SHA-256")
@@ -53,10 +58,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 			bundleActions++
 		}
 	}
-	if bundleActions > 1 || (bundleActions > 0 && (*showVersion || *checkConfig || *showIdentity || *pairingCode)) ||
+	if bundleActions > 1 || (bundleActions > 0 && (*showVersion || *checkConfig || *showIdentity || *pairingCode || *pair || *pairStatus || *pairReplace)) ||
 		(bundleActions == 0 && (*sourceID != "" || *appID != "" || *gitRevision != "")) ||
 		(*approveBundle == "" && (*sourceID != "" || *appID != "" || *gitRevision != "")) ||
-		(*approveBundle != "" && (*sourceID == "" || *appID == "" || *gitRevision == "")) {
+		(*approveBundle != "" && (*sourceID == "" || *appID == "" || *gitRevision == "")) ||
+		(*pair && *pairStatus) || (*pairReplace && !*pair) ||
+		(*pair && (*showVersion || *checkConfig || *showIdentity || *pairingCode)) ||
+		(*pairStatus && (*showVersion || *checkConfig || *showIdentity || *pairingCode || *pairReplace)) {
 		fmt.Fprintln(stderr, "invalid or conflicting local bundle approval options")
 		return 2
 	}

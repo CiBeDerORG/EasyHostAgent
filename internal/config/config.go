@@ -2,7 +2,6 @@
 package config
 
 import (
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
@@ -29,10 +28,9 @@ const (
 	EnvLogLevel       = "EASYHOSTAGENT_LOG_LEVEL"
 	EnvListen         = "EASYHOSTAGENT_LISTEN_ADDRESS"
 	EnvControllerURL  = "EASYHOSTAGENT_CONTROLLER_URL"
-	EnvDiscoveryToken = "EASYHOSTAGENT_DISCOVERY_TOKEN"
 )
 
-// Config holds host settings. DiscoveryToken is sensitive and must never be logged.
+// Config holds host settings. The one-time bootstrap token is accepted only by the interactive CLI.
 type Config struct {
 	DataDir        string
 	SoftwareRoot   string
@@ -40,8 +38,7 @@ type Config struct {
 	Transport      string
 	Platform       string
 	LogLevel       slog.Level
-	ControllerURL  string
-	DiscoveryToken string
+	ControllerURL string
 }
 
 func Load() (Config, error) {
@@ -148,21 +145,11 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 		return Config{}, err
 	}
 	controllerURL := strings.TrimSpace(getenv(EnvControllerURL))
-	discoveryToken := strings.TrimSpace(getenv(EnvDiscoveryToken))
-	if (controllerURL == "") != (discoveryToken == "") {
-		return Config{}, fmt.Errorf("EASYHOSTAGENT_CONTROLLER_URL 与 EASYHOSTAGENT_DISCOVERY_TOKEN 必须同时配置")
-	}
 	if controllerURL != "" {
 		parsed, parseErr := url.Parse(controllerURL)
 		if parseErr != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil ||
 			parsed.RawQuery != "" || parsed.Fragment != "" || strings.ContainsAny(controllerURL, "\r\n\x00") {
 			return Config{}, fmt.Errorf("EASYHOSTAGENT_CONTROLLER_URL 必须是无凭据、无查询参数的 HTTP 或 HTTPS 地址")
-		}
-		if len(discoveryToken) != 64 {
-			return Config{}, fmt.Errorf("EASYHOSTAGENT_DISCOVERY_TOKEN 必须是 64 位十六进制")
-		}
-		if _, decodeErr := hex.DecodeString(discoveryToken); decodeErr != nil {
-			return Config{}, fmt.Errorf("EASYHOSTAGENT_DISCOVERY_TOKEN 必须是 64 位十六进制")
 		}
 	}
 	// 反向管理不需要公网/局域网入站端口。保持端口，仅收敛到 loopback。
@@ -175,7 +162,7 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	} else if isMac {
 		platform = "macos"
 	}
-	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level, ControllerURL: controllerURL, DiscoveryToken: discoveryToken}, nil
+	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level, ControllerURL: controllerURL}, nil
 }
 
 func cleanAbsolute(label, value string) (string, error) {

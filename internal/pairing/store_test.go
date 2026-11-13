@@ -165,6 +165,32 @@ func TestNewPairingRevokesOldTokenOnlyOnSuccess(t *testing.T) {
 		t.Fatal("revoked token still works")
 	}
 }
+
+func TestInstallGrantAndReset(t *testing.T) {
+	s, _ := newStore(t)
+	token := strings.Repeat("ab", 32)
+	if err := s.InstallGrant(controllerA, deviceA, token); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Authorized(controllerA, agent, token) {
+		t.Fatal("externally issued grant was not installed")
+	}
+	present, err := s.HasGrant()
+	if err != nil || !present {
+		t.Fatalf("grant presence=%v err=%v", present, err)
+	}
+	if err := s.InstallGrant(controllerA, deviceA, token); err != nil {
+		t.Fatalf("idempotent install failed: %v", err)
+	}
+	if err := s.Reset(); err != nil {
+		t.Fatal(err)
+	}
+	present, err = s.HasGrant()
+	if err != nil || present || s.Authorized(controllerA, agent, token) {
+		t.Fatalf("reset left grant present=%v err=%v", present, err)
+	}
+}
+
 func TestInvalidStateFailsClosed(t *testing.T) {
 	s, dir := newStore(t)
 	code, _, err := s.Generate()

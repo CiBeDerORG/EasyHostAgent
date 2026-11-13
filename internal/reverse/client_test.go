@@ -5,11 +5,73 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
+
+
+func TestPreparePairingStoresBootstrapPrivatelyAndReplacesOldGrant(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := pairing.New(dir, "11111111-1111-4111-8111-111111111111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := strings.Repeat("a", 64)
+	if err := store.InstallGrant("22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333", old); err != nil {
+		t.Fatal(err)
+	}
+	newToken := strings.Repeat("b", 64)
+	if err := PreparePairing(dir, "https://control.example.com", newToken, false, store); err == nil {
+		t.Fatal("re-pair without explicit confirmation was accepted")
+	}
+	if err := PreparePairing(dir, "https://control.example.com", newToken, true, store); err != nil {
+		t.Fatal(err)
+	}
+	present, err := PairingStatus(dir, store)
+	if err != nil || !present {
+		t.Fatalf("pair status=%v err=%v", present, err)
+	}
+	if store.Authorized("22222222-2222-4222-8222-222222222222", "11111111-1111-4111-8111-111111111111", old) {
+		t.Fatal("old grant survived explicit re-pair")
+	}
+	info, err := os.Stat(filepath.Join(dir, bootstrapFileName))
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("bootstrap permissions: %v %v", info, err)
+	}
+	c := &client{bootstrap: filepath.Join(dir, bootstrapFileName)}
+	got, err := c.loadBootstrap()
+	if err != nil || got != newToken {
+		t.Fatalf("bootstrap=%q err=%v", got, err)
+	}
+	if err := c.clearBootstrap(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPreparePairingRequiresControllerAnd64HexToken(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	store, err := pairing.New(dir, "11111111-1111-4111-8111-111111111111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := PreparePairing(dir, "", strings.Repeat("a", 64), false, store); err == nil {
+		t.Fatal("missing controller URL accepted")
+	}
+	if err := PreparePairing(dir, "https://control.example.com", "not-a-token", false, store); err == nil {
+		t.Fatal("invalid token accepted")
+	}
+}
 
 func TestReverseControllerHTTPAndHTTPS(t *testing.T) {
 	for _, tc := range []struct {

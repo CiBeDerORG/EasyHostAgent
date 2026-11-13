@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,28 +24,36 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/identity"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/market"
+	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
-const credentialFileName = "reverse-credential.json"
+const (
+	credentialFileName = "reverse-credential.json"
+	bootstrapFileName  = "reverse-bootstrap.json"
+)
 
 type credentials struct {
 	ControllerID string `json:"controller_id"`
+	HostID       string `json:"host_id,omitempty"`
 	Token        string `json:"token"`
 }
 
 type discoveryReply struct {
 	Status       string `json:"status"`
 	ControllerID string `json:"controller_id"`
+	HostID       string `json:"host_id"`
 	AgentToken   string `json:"agent_token"`
 	NextPoll     int    `json:"next_poll_seconds"`
 }
 
 type pollReply struct {
-	Status     string       `json:"status"`
-	ExpiresAt  string       `json:"expires_at"`
-	NextPollAt string       `json:"next_poll_at"`
-	NextPoll   int          `json:"next_poll_seconds"`
-	Task       *reverseTask `json:"task"`
+	Status       string       `json:"status"`
+	ControllerID string       `json:"controller_id"`
+	HostID       string       `json:"host_id"`
+	ExpiresAt    string       `json:"expires_at"`
+	NextPollAt   string       `json:"next_poll_at"`
+	NextPoll     int          `json:"next_poll_seconds"`
+	Task         *reverseTask `json:"task"`
 }
 
 type client struct {
@@ -57,10 +66,12 @@ type client struct {
 	http       *http.Client
 	certDER    string
 	credential string
+	bootstrap  string
+	pairing    *pairing.Store
 }
 
-func Start(ctx context.Context, cfg config.Config, state identity.State, version string, apps *market.Service, bundleStore *bundles.Store, logger *slog.Logger) {
-	if cfg.ControllerURL == "" || cfg.DiscoveryToken == "" {
+func Start(ctx context.Context, cfg config.Config, state identity.State, version string, apps *market.Service, bundleStore *bundles.Store, pairingStore *pairing.Store, logger *slog.Logger) {
+	if cfg.ControllerURL == "" {
 		return
 	}
 	if logger == nil {
@@ -83,6 +94,8 @@ func Start(ctx context.Context, cfg config.Config, state identity.State, version
 		},
 		certDER:    base64.StdEncoding.EncodeToString(state.Certificate.Certificate[0]),
 		credential: filepath.Join(cfg.DataDir, credentialFileName),
+		bootstrap:  filepath.Join(cfg.DataDir, bootstrapFileName),
+		pairing:    pairingStore,
 	}
 	go c.run(ctx)
 }
@@ -102,27 +115,54 @@ func (c *client) run(ctx context.Context) {
 			return
 		}
 		if cred.Token == "" {
-			reply, err := c.discover(ctx)
+			bootstrap, loadErr := c.loadBootstrap()
+			if loadErr != nil {
+				c.logger.Error("reverse_bootstrap_unavailable", "error", loadErr)
+				return
+			}
+			if bootstrap == "" {
+				if !sleep(ctx, 10*time.Second) {
+					return
+				}
+				continue
+			}
+			reply, status, err := c.discover(ctx, bootstrap)
 			if err != nil {
-				failures++
-				c.logger.Warn("reverse_discovery_failed", "attempt", failures, "error", err)
+				if status == http.StatusForbidden || status == http.StatusUnauthorized {
+					c.logger.Warn("reverse_bootstrap_rejected", "status", status)
+					_ = c.clearBootstrap()
+				} else {
+					failures++
+					c.logger.Warn("reverse_discovery_failed", "attempt", failures, "error", err)
+				}
 				if !sleep(ctx, retryDelay(failures)) {
 					return
 				}
 				continue
 			}
 			failures = 0
-			if reply.Status == "accepted" && reply.AgentToken != "" && reply.ControllerID != "" {
-				if err := c.saveCredential(credentials{ControllerID: reply.ControllerID, Token: reply.AgentToken}); err != nil {
+			if reply.Status == "accepted" && reply.AgentToken != "" && reply.ControllerID != "" && reply.HostID != "" {
+				if c.pairing == nil {
+					c.logger.Error("reverse_pairing_store_unavailable")
+					return
+				}
+				if err := c.pairing.InstallGrant(reply.ControllerID, reply.HostID, reply.AgentToken); err != nil {
+					c.logger.Error("reverse_grant_install_failed", "error", err)
+					continue
+				}
+				if err := c.saveCredential(credentials{ControllerID: reply.ControllerID, HostID: reply.HostID, Token: reply.AgentToken}); err != nil {
 					c.logger.Error("reverse_credential_save_failed", "error", err)
 					return
 				}
+				if err := c.clearBootstrap(); err != nil {
+					c.logger.Error("reverse_bootstrap_clear_failed", "error", err)
+					return
+				}
 				lastReport = time.Time{}
-				c.logger.Info("reverse_agent_accepted", "controller_id", reply.ControllerID)
+				c.logger.Info("reverse_agent_accepted", "controller_id", reply.ControllerID, "host_id", reply.HostID)
 				continue
 			}
-			wait := seconds(reply.NextPoll, 10)
-			if !sleep(ctx, wait) {
+			if !sleep(ctx, seconds(reply.NextPoll, 10)) {
 				return
 			}
 			continue
@@ -134,10 +174,17 @@ func (c *client) run(ctx context.Context) {
 			lastReport = time.Time{}
 			if status == http.StatusGone {
 				c.logger.Info("reverse_temporary_host_expired", "agent_id", c.identity.AgentID)
+				if c.pairing != nil {
+					_ = c.pairing.Revoke(cred.ControllerID, c.identity.AgentID, cred.Token)
+				}
+				_ = c.clearCredential()
 				return
 			}
 			if status == http.StatusUnauthorized {
 				c.logger.Warn("reverse_token_rejected", "agent_id", c.identity.AgentID)
+				if c.pairing != nil {
+					_ = c.pairing.Reset()
+				}
 				if clearErr := c.clearCredential(); clearErr != nil {
 					c.logger.Error("reverse_credential_clear_failed", "error", clearErr)
 					return
@@ -154,6 +201,22 @@ func (c *client) run(ctx context.Context) {
 			continue
 		}
 		failures = 0
+		if reply.ControllerID != "" && reply.HostID != "" && c.pairing != nil {
+			if err := c.pairing.InstallGrant(reply.ControllerID, reply.HostID, cred.Token); err != nil {
+				c.logger.Error("reverse_grant_refresh_failed", "error", err)
+				if !sleep(ctx, 10*time.Second) {
+					return
+				}
+				continue
+			}
+			if cred.HostID != reply.HostID || cred.ControllerID != reply.ControllerID {
+				cred.HostID, cred.ControllerID = reply.HostID, reply.ControllerID
+				if err := c.saveCredential(cred); err != nil {
+					c.logger.Error("reverse_credential_refresh_failed", "error", err)
+					return
+				}
+			}
+		}
 		if fullReport {
 			lastReport = time.Now()
 		}
@@ -180,18 +243,18 @@ func (c *client) run(ctx context.Context) {
 	c.logger.Info("reverse_agent_stop", "agent_id", c.identity.AgentID)
 }
 
-func (c *client) discover(ctx context.Context) (discoveryReply, error) {
+func (c *client) discover(ctx context.Context, token string) (discoveryReply, int, error) {
 	payload := map[string]string{
 		"agent_id": c.identity.AgentID, "hostname": hostname(),
 		"spki_sha256": c.identity.SPKISHA256, "platform": c.cfg.Platform,
 		"arch": runtimeArch(), "version": c.version, "certificate_der": c.certDER,
 	}
 	var reply discoveryReply
-	status, err := c.post(ctx, "/api/v1/agent/discovery", c.cfg.DiscoveryToken, payload, &reply)
+	status, err := c.post(ctx, "/api/v1/agent/discovery", token, payload, &reply)
 	if err != nil {
-		return reply, fmt.Errorf("发现请求 HTTP %d: %w", status, err)
+		return reply, status, fmt.Errorf("发现请求 HTTP %d: %w", status, err)
 	}
-	return reply, nil
+	return reply, status, nil
 }
 
 func (c *client) poll(ctx context.Context, cred credentials, fullReport bool) (pollReply, int, error) {
@@ -251,6 +314,143 @@ func (c *client) post(ctx context.Context, path, token string, payload, target a
 		return resp.StatusCode, errors.New("控制端响应格式无效")
 	}
 	return resp.StatusCode, nil
+}
+
+
+func validBootstrapToken(token string) bool {
+	if len(token) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(token)
+	return err == nil
+}
+
+func PairingStatus(dataDir string, store *pairing.Store) (bool, error) {
+	if store == nil {
+		return false, errors.New("配对存储不可用")
+	}
+	hasGrant, err := store.HasGrant()
+	if err != nil {
+		return false, err
+	}
+	for _, name := range []string{credentialFileName, bootstrapFileName} {
+		path := filepath.Join(dataDir, name)
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+			return false, fmt.Errorf("配对文件权限或类型不安全：%s", name)
+		}
+		return true, nil
+	}
+	return hasGrant, nil
+}
+
+// PreparePairing stores the one-time bootstrap token supplied interactively by deploy.sh.
+func PreparePairing(dataDir, controllerURL, token string, replaceExisting bool, store *pairing.Store) error {
+	if controllerURL == "" {
+		return errors.New("请先在 deploy/.env 配置 EASYHOSTAGENT_CONTROLLER_URL")
+	}
+	if !validBootstrapToken(token) {
+		return errors.New("Token 必须是 EasyNetTopo 生成的 64 位十六进制凭据")
+	}
+	paired, err := PairingStatus(dataDir, store)
+	if err != nil {
+		return err
+	}
+	if paired && !replaceExisting {
+		return errors.New("当前主机已经配对；请先确认是否重新配对")
+	}
+	if err := saveBootstrap(dataDir, token); err != nil {
+		return err
+	}
+	if paired {
+		if err := store.Reset(); err != nil {
+			_ = os.Remove(filepath.Join(dataDir, bootstrapFileName))
+			return err
+		}
+		if err := removePrivateFile(filepath.Join(dataDir, credentialFileName)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func saveBootstrap(dataDir, token string) error {
+	data, err := json.Marshal(struct {
+		Token string `json:"token"`
+	}{Token: token})
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dataDir, ".reverse-bootstrap-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, filepath.Join(dataDir, bootstrapFileName))
+}
+
+func (c *client) loadBootstrap() (string, error) {
+	info, err := os.Lstat(c.bootstrap)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+		return "", errors.New("一次性接入凭据文件权限或类型不安全")
+	}
+	data, err := os.ReadFile(c.bootstrap)
+	if err != nil {
+		return "", err
+	}
+	var value struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(data, &value); err != nil || !validBootstrapToken(value.Token) {
+		return "", errors.New("一次性接入凭据文件损坏")
+	}
+	return value.Token, nil
+}
+
+func (c *client) clearBootstrap() error {
+	return removePrivateFile(c.bootstrap)
+}
+
+func removePrivateFile(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("拒绝删除非普通凭据文件")
+	}
+	return os.Remove(path)
 }
 
 func (c *client) loadCredential() (credentials, error) {

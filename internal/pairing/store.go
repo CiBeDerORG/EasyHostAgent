@@ -169,6 +169,54 @@ func (s *Store) Exchange(controllerID, deviceID, code string) (Result, error) {
 
 // Authorized is fail-closed when the store is missing/corrupt or unavailable.
 // The public API never receives the raw token hash.
+
+func (s *Store) HasGrant() (bool, error) {
+	var present bool
+	err := s.withLock(func(r *record) (bool, error) {
+		present = r.Grant != nil
+		return false, nil
+	})
+	return present, err
+}
+
+// InstallGrant adopts the controller-issued reverse token as the durable direct-management grant.
+// Only its SHA-256 digest is persisted; repeating the same grant is idempotent.
+func (s *Store) InstallGrant(controllerID, deviceID, token string) error {
+	if !validUUID(controllerID) || !validUUID(deviceID) || len(token) != 64 {
+		return ErrInvalidIDs
+	}
+	if _, err := hex.DecodeString(token); err != nil {
+		return ErrUnauthorized
+	}
+	return s.withLock(func(r *record) (bool, error) {
+		if r.Grant != nil && r.Grant.ControllerID == controllerID &&
+			r.Grant.DeviceID == deviceID && secureEqualHex(r.Grant.TokenHash, hash(token)) {
+			return false, nil
+		}
+		r.Grant = &grant{
+			ControllerID: controllerID,
+			DeviceID:     deviceID,
+			TokenHash:    hash(token),
+			PairedAt:     s.now().UTC(),
+		}
+		r.CodeHash = ""
+		r.ExpiresAt = time.Time{}
+		r.Attempts = 0
+		return true, nil
+	})
+}
+
+// Reset clears all local pairing material before an explicitly confirmed re-pair.
+func (s *Store) Reset() error {
+	return s.withLock(func(r *record) (bool, error) {
+		r.Grant = nil
+		r.CodeHash = ""
+		r.ExpiresAt = time.Time{}
+		r.Attempts = 0
+		return true, nil
+	})
+}
+
 func (s *Store) Authorized(controllerID, agentID, token string) bool {
 	if agentID != s.agentID || !validUUID(controllerID) || len(token) != 64 {
 		return false

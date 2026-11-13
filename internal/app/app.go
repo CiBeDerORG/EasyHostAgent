@@ -80,7 +80,7 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("初始化应用执行器: %w", err)
 	}
 	defer func() { stopJobs(); apps.Wait() }()
-	reverse.Start(jobsCtx, cfg, state, buildinfo.Version, apps, bundleStore, logger)
+	reverse.Start(jobsCtx, cfg, state, buildinfo.Version, apps, bundleStore, store, logger)
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("%s listen %q: %w", cfg.Transport, cfg.ListenAddr, err)
