@@ -14,7 +14,6 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/pairing"
 )
 
-
 func TestPreparePairingStoresBootstrapPrivatelyAndReplacesOldGrant(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0700); err != nil {

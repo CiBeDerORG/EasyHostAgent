@@ -59,6 +59,49 @@ func TestLocalIdentityCommandIsStable(t *testing.T) {
 		t.Fatalf("unstable local identity: %q vs %q", first.String(), second.String())
 	}
 }
+func TestInteractiveTokenPairing(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "agent-state")
+	t.Setenv("EASYHOSTAGENT_DATA_DIR", dir)
+	t.Setenv("EASYHOSTAGENT_SOFTWARE_ROOT", "/opt/software")
+	t.Setenv("EASYHOSTAGENT_CONTROLLER_URL", "https://controller.example.com")
+	var out, errors bytes.Buffer
+	if code := run([]string{"-pair-status"}, &out, &errors); code != 0 || !strings.Contains(out.String(), "paired=false") {
+		t.Fatalf("unexpected initial status: code=%d out=%q err=%q", code, out.String(), errors.String())
+	}
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = old
+		_ = reader.Close()
+	})
+	token := strings.Repeat("ab", 32)
+	if _, err := writer.WriteString(token + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = writer.Close()
+	out.Reset()
+	errors.Reset()
+	if code := run([]string{"-pair"}, &out, &errors); code != 0 {
+		t.Fatalf("pair failed: %d %s", code, errors.String())
+	}
+	if strings.Contains(out.String(), token) || strings.Contains(errors.String(), token) {
+		t.Fatal("one-time token leaked into CLI output")
+	}
+	info, err := os.Stat(filepath.Join(dir, "reverse-bootstrap.json"))
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("private token file: %v %v", info, err)
+	}
+	out.Reset()
+	errors.Reset()
+	if code := run([]string{"-pair-status"}, &out, &errors); code != 0 || !strings.Contains(out.String(), "paired=true") {
+		t.Fatalf("token was not retained: code=%d out=%q err=%q", code, out.String(), errors.String())
+	}
+}
+
 func TestBadFlagsAndConfig(t *testing.T) {
 	var out, errors bytes.Buffer
 	if code := run([]string{"--unknown"}, &out, &errors); code != 2 {

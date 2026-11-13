@@ -61,15 +61,15 @@ type pollReply struct {
 }
 
 type client struct {
-	cfg        config.Config
-	identity   identity.State
-	version    string
-	apps       *market.Service
-	bundles    *bundles.Store
-	logger     *slog.Logger
-	http       *http.Client
-	certDER    string
-	credential string
+	cfg               config.Config
+	identity          identity.State
+	version           string
+	apps              *market.Service
+	bundles           *bundles.Store
+	logger            *slog.Logger
+	http              *http.Client
+	certDER           string
+	credential        string
 	bootstrap         string
 	pairing           *pairing.Store
 	onPromotion       func(string) error
@@ -99,9 +99,9 @@ func Start(ctx context.Context, cfg config.Config, state identity.State, version
 			},
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		certDER:    base64.StdEncoding.EncodeToString(state.Certificate.Certificate[0]),
-		credential: filepath.Join(cfg.DataDir, credentialFileName),
-		bootstrap:  filepath.Join(cfg.DataDir, bootstrapFileName),
+		certDER:     base64.StdEncoding.EncodeToString(state.Certificate.Certificate[0]),
+		credential:  filepath.Join(cfg.DataDir, credentialFileName),
+		bootstrap:   filepath.Join(cfg.DataDir, bootstrapFileName),
 		pairing:     pairingStore,
 		onPromotion: onPromotion,
 	}
@@ -379,7 +379,6 @@ func (c *client) post(ctx context.Context, path, token string, payload, target a
 	}
 	return resp.StatusCode, nil
 }
-
 
 func validBootstrapToken(token string) bool {
 	if len(token) != 64 {
