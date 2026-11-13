@@ -8,9 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strings"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/app"

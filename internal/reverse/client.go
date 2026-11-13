@@ -178,6 +178,11 @@ func (c *client) run(ctx context.Context) {
 					_ = c.pairing.Revoke(cred.ControllerID, c.identity.AgentID, cred.Token)
 				}
 				_ = c.clearCredential()
+				bootstrap, bootstrapErr := c.loadBootstrap()
+				if bootstrapErr == nil && bootstrap != "" {
+					failures = 0
+					continue
+				}
 				return
 			}
 			if status == http.StatusUnauthorized {
