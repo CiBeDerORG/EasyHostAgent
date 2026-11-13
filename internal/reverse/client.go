@@ -1,4 +1,4 @@
-// Package reverse maintains an outbound HTTPS control channel for hosts behind NAT.
+// Package reverse maintains an outbound HTTP(S) control channel for hosts behind NAT.
 // It intentionally uses short requests and does not expose a new inbound listener.
 package reverse
 
@@ -65,6 +65,10 @@ func Start(ctx context.Context, cfg config.Config, state identity.State, version
 	}
 	if logger == nil {
 		logger = slog.Default()
+	}
+	if strings.HasPrefix(cfg.ControllerURL, "http://") {
+		logger.Warn("reverse_agent_plain_http", "controller", cfg.ControllerURL,
+			"warning", "HTTP 为明文连接，发现凭据、Agent Token 和安装参数可能被窃听；仅在可信隔离网络使用")
 	}
 	c := &client{
 		cfg: cfg, identity: state, version: version, apps: apps, bundles: bundleStore, logger: logger,
