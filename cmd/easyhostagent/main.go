@@ -78,6 +78,39 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "configuration error:", err)
 		return 1
 	}
+	if *pair || *pairStatus {
+		state, err := identity.LoadOrCreate(cfg.DataDir)
+		if err != nil {
+			fmt.Fprintln(stderr, "identity error:", err)
+			return 1
+		}
+		store, err := pairing.New(cfg.DataDir, state.AgentID)
+		if err != nil {
+			fmt.Fprintln(stderr, "pairing store error:", err)
+			return 1
+		}
+		if *pairStatus {
+			paired, err := reverse.PairingStatus(cfg.DataDir, store)
+			if err != nil {
+				fmt.Fprintln(stderr, "pairing status error:", err)
+				return 1
+			}
+			fmt.Fprintf(stdout, "paired=%t\n", paired)
+			return 0
+		}
+		raw, err := io.ReadAll(io.LimitReader(os.Stdin, 256))
+		if err != nil {
+			fmt.Fprintln(stderr, "无法读取一次性 Token")
+			return 1
+		}
+		token := strings.TrimSpace(string(raw))
+		if err := reverse.PreparePairing(cfg.DataDir, cfg.ControllerURL, token, *pairReplace, store); err != nil {
+			fmt.Fprintln(stderr, "配对请求未提交：", err)
+			return 1
+		}
+		fmt.Fprintln(stdout, "一次性 Token 已安全保存；EasyHostAgent 将主动连接 EasyNetTopo，等待管理员确认。")
+		return 0
+	}
 	if bundleActions != 0 {
 		state, err := identity.LoadOrCreate(cfg.DataDir)
 		if err != nil {
