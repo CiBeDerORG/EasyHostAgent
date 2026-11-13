@@ -154,9 +154,9 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	}
 	if controllerURL != "" {
 		parsed, parseErr := url.Parse(controllerURL)
-		if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
+		if parseErr != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil ||
 			parsed.RawQuery != "" || parsed.Fragment != "" || strings.ContainsAny(controllerURL, "\r\n\x00") {
-			return Config{}, fmt.Errorf("EASYHOSTAGENT_CONTROLLER_URL 必须是无凭据、无查询参数的 HTTPS 地址")
+			return Config{}, fmt.Errorf("EASYHOSTAGENT_CONTROLLER_URL 必须是无凭据、无查询参数的 HTTP 或 HTTPS 地址")
 		}
 		if len(discoveryToken) != 64 {
 			return Config{}, fmt.Errorf("EASYHOSTAGENT_DISCOVERY_TOKEN 必须是 64 位十六进制")
