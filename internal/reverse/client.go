@@ -13,10 +13,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,13 +49,15 @@ type discoveryReply struct {
 }
 
 type pollReply struct {
-	Status       string       `json:"status"`
-	ControllerID string       `json:"controller_id"`
-	HostID       string       `json:"host_id"`
-	ExpiresAt    string       `json:"expires_at"`
-	NextPollAt   string       `json:"next_poll_at"`
-	NextPoll     int          `json:"next_poll_seconds"`
-	Task         *reverseTask `json:"task"`
+	Status            string       `json:"status"`
+	ControllerID      string       `json:"controller_id"`
+	HostID            string       `json:"host_id"`
+	ExpiresAt         string       `json:"expires_at"`
+	NextPollAt        string       `json:"next_poll_at"`
+	NextPoll          int          `json:"next_poll_seconds"`
+	PromotionEndpoint string       `json:"promotion_endpoint,omitempty"`
+	Promoted          bool         `json:"promoted,omitempty"`
+	Task              *reverseTask `json:"task"`
 }
 
 type client struct {
@@ -66,11 +70,14 @@ type client struct {
 	http       *http.Client
 	certDER    string
 	credential string
-	bootstrap  string
-	pairing    *pairing.Store
+	bootstrap         string
+	pairing           *pairing.Store
+	onPromotion       func(string) error
+	promotionEndpoint string
+	promotionReady    bool
 }
 
-func Start(ctx context.Context, cfg config.Config, state identity.State, version string, apps *market.Service, bundleStore *bundles.Store, pairingStore *pairing.Store, logger *slog.Logger) {
+func Start(ctx context.Context, cfg config.Config, state identity.State, version string, apps *market.Service, bundleStore *bundles.Store, pairingStore *pairing.Store, onPromotion func(string) error, logger *slog.Logger) {
 	if cfg.ControllerURL == "" {
 		return
 	}
@@ -95,7 +102,8 @@ func Start(ctx context.Context, cfg config.Config, state identity.State, version
 		certDER:    base64.StdEncoding.EncodeToString(state.Certificate.Certificate[0]),
 		credential: filepath.Join(cfg.DataDir, credentialFileName),
 		bootstrap:  filepath.Join(cfg.DataDir, bootstrapFileName),
-		pairing:    pairingStore,
+		pairing:     pairingStore,
+		onPromotion: onPromotion,
 	}
 	go c.run(ctx)
 }
@@ -115,6 +123,13 @@ func (c *client) run(ctx context.Context) {
 			return
 		}
 		if cred.Token == "" {
+			if c.promotionEndpoint != "" {
+				c.promotionEndpoint = ""
+				c.promotionReady = false
+				if c.onPromotion != nil {
+					_ = c.onPromotion("")
+				}
+			}
 			bootstrap, loadErr := c.loadBootstrap()
 			if loadErr != nil {
 				c.logger.Error("reverse_bootstrap_unavailable", "error", loadErr)
@@ -178,6 +193,11 @@ func (c *client) run(ctx context.Context) {
 					_ = c.pairing.Revoke(cred.ControllerID, c.identity.AgentID, cred.Token)
 				}
 				_ = c.clearCredential()
+				_ = ClearPromotion(c.cfg.DataDir)
+				if c.onPromotion != nil {
+					_ = c.onPromotion("")
+				}
+				c.promotionEndpoint, c.promotionReady = "", false
 				bootstrap, bootstrapErr := c.loadBootstrap()
 				if bootstrapErr == nil && bootstrap != "" {
 					failures = 0
@@ -190,6 +210,11 @@ func (c *client) run(ctx context.Context) {
 				if c.pairing != nil {
 					_ = c.pairing.Reset()
 				}
+				_ = ClearPromotion(c.cfg.DataDir)
+				if c.onPromotion != nil {
+					_ = c.onPromotion("")
+				}
+				c.promotionEndpoint, c.promotionReady = "", false
 				if clearErr := c.clearCredential(); clearErr != nil {
 					c.logger.Error("reverse_credential_clear_failed", "error", clearErr)
 					return
@@ -206,6 +231,21 @@ func (c *client) run(ctx context.Context) {
 			continue
 		}
 		failures = 0
+		if reply.PromotionEndpoint != "" {
+			if c.promotionEndpoint != reply.PromotionEndpoint || !c.promotionReady {
+				c.promotionEndpoint = reply.PromotionEndpoint
+				if c.onPromotion == nil {
+					c.promotionReady = false
+					c.logger.Warn("reverse_promotion_listener_unavailable")
+				} else if err := c.onPromotion(reply.PromotionEndpoint); err != nil {
+					c.promotionReady = false
+					c.logger.Warn("reverse_promotion_listener_failed", "error", err)
+				} else {
+					c.promotionReady = true
+					c.logger.Info("reverse_promotion_listener_ready", "endpoint", reply.PromotionEndpoint)
+				}
+			}
+		}
 		if reply.ControllerID != "" && reply.HostID != "" && c.pairing != nil {
 			if err := c.pairing.InstallGrant(reply.ControllerID, reply.HostID, cred.Token); err != nil {
 				c.logger.Error("reverse_grant_refresh_failed", "error", err)
@@ -225,7 +265,7 @@ func (c *client) run(ctx context.Context) {
 		if fullReport {
 			lastReport = time.Now()
 		}
-		if reply.Status != "accepted" {
+		if reply.Status != "accepted" && reply.Status != "promoted" {
 			c.logger.Warn("reverse_poll_rejected", "status", reply.Status)
 			if !sleep(ctx, 30*time.Second) {
 				return
@@ -248,11 +288,24 @@ func (c *client) run(ctx context.Context) {
 	c.logger.Info("reverse_agent_stop", "agent_id", c.identity.AgentID)
 }
 
+func (c *client) listenPort() int {
+	_, rawPort, err := net.SplitHostPort(c.cfg.ListenAddr)
+	if err != nil {
+		return 0
+	}
+	port, err := strconv.Atoi(rawPort)
+	if err != nil {
+		return 0
+	}
+	return port
+}
+
 func (c *client) discover(ctx context.Context, token string) (discoveryReply, int, error) {
-	payload := map[string]string{
+	payload := map[string]any{
 		"agent_id": c.identity.AgentID, "hostname": hostname(),
 		"spki_sha256": c.identity.SPKISHA256, "platform": c.cfg.Platform,
 		"arch": runtimeArch(), "version": c.version, "certificate_der": c.certDER,
+		"listen_port": c.listenPort(), "transport": c.cfg.Transport,
 	}
 	var reply discoveryReply
 	status, err := c.post(ctx, "/api/v1/agent/discovery", token, payload, &reply)
@@ -265,6 +318,10 @@ func (c *client) discover(ctx context.Context, token string) (discoveryReply, in
 func (c *client) poll(ctx context.Context, cred credentials, fullReport bool) (pollReply, int, error) {
 	var reply pollReply
 	payload := map[string]any{"agent_id": c.identity.AgentID, "report": fullReport}
+	if c.promotionEndpoint != "" {
+		payload["promotion_endpoint"] = c.promotionEndpoint
+		payload["promotion_ready"] = c.promotionReady
+	}
 	if fullReport {
 		payload["hostname"] = hostname()
 		payload["spki_sha256"] = c.identity.SPKISHA256
@@ -272,6 +329,8 @@ func (c *client) poll(ctx context.Context, cred credentials, fullReport bool) (p
 		payload["arch"] = runtimeArch()
 		payload["version"] = c.version
 		payload["certificate_der"] = c.certDER
+		payload["listen_port"] = c.listenPort()
+		payload["transport"] = c.cfg.Transport
 	}
 	status, err := c.post(ctx, "/api/v1/agent/poll", cred.Token, payload, &reply)
 	if err != nil {
@@ -379,6 +438,9 @@ func PreparePairing(dataDir, controllerURL, token string, replaceExisting bool, 
 			return err
 		}
 		if err := removePrivateFile(filepath.Join(dataDir, credentialFileName)); err != nil {
+			return err
+		}
+		if err := ClearPromotion(dataDir); err != nil {
 			return err
 		}
 	}

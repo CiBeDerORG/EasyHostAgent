@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"net/url"
+	"sync"
 	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/adapters"
@@ -80,7 +82,6 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("初始化应用执行器: %w", err)
 	}
 	defer func() { stopJobs(); apps.Wait() }()
-	reverse.Start(jobsCtx, cfg, state, buildinfo.Version, apps, bundleStore, store, logger)
 	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("%s listen %q: %w", cfg.Transport, cfg.ListenAddr, err)
@@ -97,21 +98,93 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    16 << 10,
 	}
-	errCh := make(chan error, 1)
-	go func() {
+	errCh := make(chan error, 4)
+	serveListener := func(listener net.Listener) {
+		var serveErr error
 		if cfg.Transport == "http" {
-			errCh <- srv.Serve(ln)
+			serveErr = srv.Serve(listener)
 		} else {
-			errCh <- srv.Serve(tls.NewListener(ln, tlsConfig))
+			serveErr = srv.Serve(tls.NewListener(listener, tlsConfig))
 		}
-	}()
-	logger.Info("agent_start", "agent_id", state.AgentID, "listen", ln.Addr().String(),
-		"tls_spki_sha256", state.SPKISHA256, "platform", cfg.Platform, "transport", cfg.Transport)
-	select {
-	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) && !errors.Is(serveErr, net.ErrClosed) {
+			select {
+			case errCh <- serveErr:
+			default:
+			}
+		}
+	}
+	go serveListener(ln)
+
+	_, configuredPort, err := net.SplitHostPort(cfg.ListenAddr)
+	if err != nil {
+		return fmt.Errorf("invalid Agent listen address %q: %w", cfg.ListenAddr, err)
+	}
+	var overlayMu sync.Mutex
+	var overlayListener net.Listener
+	var overlayEndpoint string
+	onPromotion := func(endpoint string) error {
+		if endpoint == "" {
+			overlayMu.Lock()
+			oldListener := overlayListener
+			overlayListener = nil
+			overlayEndpoint = ""
+			overlayMu.Unlock()
+			if oldListener != nil {
+				_ = oldListener.Close()
+			}
+			return reverse.ClearPromotion(cfg.DataDir)
+		}
+		parsed, err := url.Parse(endpoint)
+		if err != nil || parsed.Scheme != cfg.Transport || parsed.User != nil ||
+			parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return errors.New("控制端下发的组网监听地址无效")
+		}
+		ip := net.ParseIP(parsed.Hostname())
+		if ip == nil || !ip.IsGlobalUnicast() || parsed.Port() != configuredPort {
+			return errors.New("组网监听地址必须是有效组网 IP，且端口必须与 Agent 当前监听端口一致")
+		}
+		if err := reverse.SavePromotion(cfg.DataDir, endpoint); err != nil {
+			return err
+		}
+		overlayMu.Lock()
+		if overlayEndpoint == endpoint && overlayListener != nil {
+			overlayMu.Unlock()
 			return nil
 		}
+		overlayMu.Unlock()
+
+		listener, err := net.Listen("tcp", net.JoinHostPort(ip.String(), configuredPort))
+		if err != nil {
+			return err
+		}
+		overlayMu.Lock()
+		oldListener := overlayListener
+		overlayListener = listener
+		overlayEndpoint = endpoint
+		overlayMu.Unlock()
+		go serveListener(listener)
+		if oldListener != nil {
+			_ = oldListener.Close()
+		}
+		logger.Info("agent_overlay_listen", "endpoint", endpoint)
+		return nil
+	}
+
+	logger.Info("agent_start", "agent_id", state.AgentID, "listen", ln.Addr().String(),
+		"tls_spki_sha256", state.SPKISHA256, "platform", cfg.Platform, "transport", cfg.Transport)
+	// If this Agent was already promoted, restore its overlay listener on restart.
+	// Failure is non-fatal here: the reverse channel retries until EasyTier assigns the IP.
+	if endpoint, ok, loadErr := reverse.LoadPromotion(cfg.DataDir); loadErr != nil {
+		logger.Warn("agent_overlay_state_unavailable", "error", loadErr)
+	} else if ok {
+		if bindErr := onPromotion(endpoint); bindErr != nil {
+			logger.Warn("agent_overlay_listen_pending", "endpoint", endpoint, "error", bindErr)
+		}
+	}
+	reverse.Start(jobsCtx, cfg, state, buildinfo.Version, apps, bundleStore, store, onPromotion, logger)
+
+	select {
+	case err := <-errCh:
 		return err
 	case <-ctx.Done():
 		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -120,7 +193,6 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if err != nil {
 			_ = srv.Close()
 		}
-		<-errCh
 		logger.Info("agent_stop", "reason", "signal_or_context_cancelled")
 		return err
 	}
