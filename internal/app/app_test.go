@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"net"
-	"time"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CiBeDerORG/EasyHostAgent/internal/config"
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
