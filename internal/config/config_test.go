@@ -62,6 +62,35 @@ func TestFromSourcesRejectsUnsafeSettings(t *testing.T) {
 		}
 	}
 }
+func TestParseListenAddresses(t *testing.T) {
+	got, err := ParseListenAddresses("192.168.1.10:7018,10.10.10.5:7019")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0] != "192.168.1.10:7018" || got[1] != "10.10.10.5:7019" {
+		t.Fatalf("unexpected addresses: %v", got)
+	}
+	cfg, err := FromSources(env(map[string]string{EnvListen: "127.0.0.1:7018,127.0.0.1:7019"}), "ID=ubuntu", false)
+	if err != nil || len(cfg.ListenAddrs) != 2 {
+		t.Fatalf("config should keep both addresses: %+v, %v", cfg, err)
+	}
+	for _, input := range []string{
+		"127.0.0.1:7018,", ",127.0.0.1:7018",
+		"127.0.0.1:7018,,127.0.0.2:7018",
+		"127.0.0.1:7018,127.0.0.1:7018",
+		"0.0.0.0:7018,127.0.0.1:7018",
+		"192.168.1.0/24:7018", "127.0.0.1:0",
+		"127.0.0.1:7018,127.0.0.2:65536",
+	} {
+		if _, err := ParseListenAddresses(input); err == nil {
+			t.Errorf("expected rejection for %q", input)
+		}
+	}
+	if got, err := ParseListenAddresses("127.0.0.1:7018,127.0.0.2:7018"); err != nil || len(got) != 2 {
+		t.Fatalf("same port on separate IPs must work: %v, %v", got, err)
+	}
+}
+
 func TestMissingEnvGetter(t *testing.T) {
 	_, err := FromSources(nil, "", false)
 	if err == nil || !strings.Contains(err.Error(), "environment") {
