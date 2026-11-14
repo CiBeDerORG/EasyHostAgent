@@ -79,9 +79,23 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("初始化应用执行器: %w", err)
 	}
 	defer func() { stopJobs(); apps.Wait() }()
-	ln, err := net.Listen("tcp", cfg.ListenAddr)
-	if err != nil {
-		return fmt.Errorf("%s listen %q: %w", cfg.Transport, cfg.ListenAddr, err)
+	addresses := cfg.ListenAddrs
+	if len(addresses) == 0 {
+		// Retain compatibility with callers constructing config.Config directly.
+		addresses = []string{cfg.ListenAddr}
+	}
+	listeners := make([]net.Listener, 0, len(addresses))
+	bound := make([]string, 0, len(addresses))
+	for _, addr := range addresses {
+		ln, listenErr := net.Listen("tcp", addr)
+		if listenErr != nil {
+			for _, opened := range listeners {
+				_ = opened.Close()
+			}
+			return fmt.Errorf("%s listen %q: %w", cfg.Transport, addr, listenErr)
+		}
+		listeners = append(listeners, ln)
+		bound = append(bound, ln.Addr().String())
 	}
 	tlsConfig := &tls.Config{
 		MinVersion:   tls.VersionTLS13,
@@ -95,30 +109,45 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    16 << 10,
 	}
-	errCh := make(chan error, 1)
-	go func() {
-		if cfg.Transport == "http" {
-			errCh <- srv.Serve(ln)
-		} else {
-			errCh <- srv.Serve(tls.NewListener(ln, tlsConfig))
-		}
-	}()
-	logger.Info("agent_start", "agent_id", state.AgentID, "listen", ln.Addr().String(),
+	errCh := make(chan error, len(listeners))
+	for _, listener := range listeners {
+		go func(ln net.Listener) {
+			if cfg.Transport == "http" {
+				errCh <- srv.Serve(ln)
+			} else {
+				errCh <- srv.Serve(tls.NewListener(ln, tlsConfig))
+			}
+		}(listener)
+	}
+	logger.Info("agent_start", "agent_id", state.AgentID, "listen", bound,
 		"tls_spki_sha256", state.SPKISHA256, "platform", cfg.Platform, "transport", cfg.Transport)
-	select {
-	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	case <-ctx.Done():
+
+	// One Serve exiting unexpectedly must not leave the other addresses alive.
+	// Server.Shutdown closes all listeners registered by Serve.
+	shutdown := func() error {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err := srv.Shutdown(stopCtx)
 		if err != nil {
 			_ = srv.Close()
 		}
-		<-errCh
+		return err
+	}
+	select {
+	case serveErr := <-errCh:
+		stopErr := shutdown()
+		for i := 1; i < len(listeners); i++ {
+			<-errCh
+		}
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			return serveErr
+		}
+		return stopErr
+	case <-ctx.Done():
+		err := shutdown()
+		for i := 0; i < len(listeners); i++ {
+			<-errCh
+		}
 		logger.Info("agent_stop", "reason", "signal_or_context_cancelled")
 		return err
 	}
