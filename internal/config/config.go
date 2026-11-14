@@ -14,8 +14,9 @@ import (
 	"github.com/CiBeDerORG/EasyHostAgent/internal/logging"
 )
 
+const MaxListenAddresses = 32
+
 const (
-	MaxListenAddresses = 32
 	DefaultDataDir   = "/var/lib/easyhostagent"
 	DefaultLinuxRoot = "/opt/software"
 	DefaultFnOSRoot  = "/vol3/1000/software"
