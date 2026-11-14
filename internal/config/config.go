@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	MaxListenAddresses = 32
 	DefaultDataDir   = "/var/lib/easyhostagent"
 	DefaultLinuxRoot = "/opt/software"
 	DefaultFnOSRoot  = "/vol3/1000/software"
@@ -33,6 +34,7 @@ type Config struct {
 	DataDir      string
 	SoftwareRoot string
 	ListenAddr   string
+	ListenAddrs  []string
 	Transport    string
 	Platform     string
 	LogLevel     slog.Level
@@ -126,16 +128,9 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	if cleanData == cleanRoot {
 		return Config{}, fmt.Errorf("data dir and software root must be different")
 	}
-	if strings.ContainsAny(listenAddr, " /\t\n\r") {
-		return Config{}, fmt.Errorf("invalid listen address")
-	}
-	_, port, err := net.SplitHostPort(listenAddr)
+	listenAddrs, err := ParseListenAddresses(listenAddr)
 	if err != nil {
-		return Config{}, fmt.Errorf("invalid listen address: %w", err)
-	}
-	num, err := strconv.Atoi(port)
-	if err != nil || num < 1 || num > 65535 {
-		return Config{}, fmt.Errorf("invalid listen port: %q", port)
+		return Config{}, err
 	}
 	level, err := logging.ParseLevel(getenv(EnvLogLevel))
 	if err != nil {
@@ -147,7 +142,59 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	} else if isMac {
 		platform = "macos"
 	}
-	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, Transport: transport, Platform: platform, LogLevel: level}, nil
+	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, ListenAddrs: listenAddrs, Transport: transport, Platform: platform, LogLevel: level}, nil
+}
+
+
+// ParseListenAddresses accepts one or more comma-separated TCP bind addresses.
+// A subnet is not a bind address: only locally bindable host:port entries are
+// supported. Keep the existing single-address environment variable compatible.
+func ParseListenAddresses(value string) ([]string, error) {
+	parts := strings.Split(value, ",")
+	if len(parts) > MaxListenAddresses {
+		return nil, fmt.Errorf("too many listen addresses (maximum %d)", MaxListenAddresses)
+	}
+	type endpoint struct {
+		host string
+		port int
+	}
+	endpoints := make([]endpoint, 0, len(parts))
+	addresses := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, part := range parts {
+		addr := strings.TrimSpace(part)
+		if addr == "" || strings.ContainsAny(addr, " /\t\n\r") {
+			return nil, fmt.Errorf("invalid listen address %q", part)
+		}
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid listen address %q: %w", addr, err)
+		}
+		num, err := strconv.Atoi(port)
+		if err != nil || num < 1 || num > 65535 {
+			return nil, fmt.Errorf("invalid listen port in %q", addr)
+		}
+		normalized := net.JoinHostPort(host, strconv.Itoa(num))
+		if seen[normalized] {
+			return nil, fmt.Errorf("duplicate listen address %q", addr)
+		}
+		for _, previous := range endpoints {
+			if previous.port != num {
+				continue
+			}
+			// Wildcard and concrete listeners for the same address family
+			// can overlap. Reject them before any sockets are opened.
+			if host == "" || previous.host == "" || host == "::" || previous.host == "::" ||
+				(host == "0.0.0.0" && !strings.Contains(previous.host, ":")) ||
+				(previous.host == "0.0.0.0" && !strings.Contains(host, ":")) {
+				return nil, fmt.Errorf("overlapping listen addresses on port %d", num)
+			}
+		}
+		seen[normalized] = true
+		endpoints = append(endpoints, endpoint{host: host, port: num})
+		addresses = append(addresses, addr)
+	}
+	return addresses, nil
 }
 
 func cleanAbsolute(label, value string) (string, error) {
