@@ -146,7 +146,6 @@ func FromSources(getenv func(string) string, osRelease string, fnosMarker bool) 
 	return Config{DataDir: cleanData, SoftwareRoot: cleanRoot, ListenAddr: listenAddr, ListenAddrs: listenAddrs, Transport: transport, Platform: platform, LogLevel: level}, nil
 }
 
-
 // ParseListenAddresses accepts one or more comma-separated TCP bind addresses.
 // A subnet is not a bind address: only locally bindable host:port entries are
 // supported. Keep the existing single-address environment variable compatible.
