@@ -47,7 +47,7 @@ func TestRunMultipleListenersAndShutdown(t *testing.T) {
 	cfg := config.Config{
 		DataDir: filepath.Join(t.TempDir(), "state"), SoftwareRoot: "/opt/software",
 		ListenAddrs: []string{"127.0.0.1:0", "127.0.0.1:0"},
-		Transport: "http", Platform: "linux",
+		Transport:   "http", Platform: "linux",
 	}
 	go func() { done <- Run(ctx, cfg, logging.New(&buf, 0)) }()
 	// Wait until startup logs contain the two bound listener addresses.
