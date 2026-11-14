@@ -162,6 +162,21 @@ HTTP 配对契约：
 
 [配对实现与验收报告](docs/T01-04-pairing.md) · [Go race 与双架构 CI](https://github.com/CiBeDerORG/EasyHostAgent/actions/runs/40428675525)
 
+## 多监听地址（main）
+
+`EASYHOSTAGENT_LISTEN_ADDRESS` 仍是一个环境变量，现可按逗号分隔多个绑定端点：
+
+```dotenv
+# 旧单地址写法仍兼容，部署入口默认端口为 7018
+EASYHOSTAGENT_LISTEN_ADDRESS=0.0.0.0:7018
+# 也可以分别绑定多个本机地址，端口可以相同或不同
+EASYHOSTAGENT_LISTEN_ADDRESS=192.168.10.162:7019,10.10.10.5:7019
+```
+
+Agent 独立运行时保留原默认端口 `7014`；使用 deploy 安装时默认 `7018`。每个地址必须属于本机或是合法的通配监听，CIDR（例如 `10.10.10.0/24:7019`）不支持直接绑定。最多 32 个地址，禁止重复条目以及同端口的通配 IPv4/具体 IPv4 冲突。启动时必须全部绑定成功，否则立即关闭已创建的监听器并整体失败。各个监听器共用同一个 HTTP/HTTPS 服务、TLS 身份、授权状态和 API；网络接口 IP 更改后需重启 Agent。
+
+Linux/fnOS 的 deploy 安装脚本以及 macOS 的 LaunchAgent 安装脚本均支持逗号列表；新配置请在升级到支持此功能的 Agent 二进制后再启用。macOS 安装脚本会逐项执行健康检查，确保每个入口返回 ready。
+
 ## 配置（环境变量）
 
 | 变量 | Linux 默认值 | FnOS 检测后默认值 |
