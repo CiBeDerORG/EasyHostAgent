@@ -10,7 +10,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -58,8 +61,9 @@ func TestMacOSMarketplaceRoutesAvailableWithoutDockerDesktop(t *testing.T) {
 	}
 	base := "https://" + addr
 	var identity struct {
-		Platform string `json:"platform"`
-		Versions []int  `json:"app_manifest_versions"`
+		Platform         string   `json:"platform"`
+		Versions         []int    `json:"app_manifest_versions"`
+		NativeInstallers []string `json:"native_installers"`
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -89,6 +93,10 @@ func TestMacOSMarketplaceRoutesAvailableWithoutDockerDesktop(t *testing.T) {
 	if identity.Platform != "macos" || len(identity.Versions) != 2 ||
 		identity.Versions[0] != 1 || identity.Versions[1] != 2 {
 		t.Fatalf("Mac app marketplace must advertise existing manifest schema: %+v", identity)
+	}
+
+	if slices.Contains(identity.NativeInstallers, "maestro") != (runtime.GOOS == "darwin" && os.Geteuid() != 0) {
+		t.Fatalf("原生 Maestro 安装能力与实际主机不符：%+v", identity)
 	}
 
 	request, err := http.NewRequest(http.MethodPost, base+"/v1/apps/status", bytes.NewBufferString(`{"apps":[]}`))

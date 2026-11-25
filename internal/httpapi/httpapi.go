@@ -79,8 +79,13 @@ func NewHandlerWithAdaptersTransport(state identity.State, platform, version str
 			// 未启用应用执行器时不向控制端声明清单能力。
 			manifestVersions = []int{}
 		}
+		nativeInstallers := []string{}
+		if apps != nil {
+			nativeInstallers = apps.NativeInstallers()
+		}
 		sendJSON(w, map[string]any{
-			"protocol_version": 1, "agent_id": state.AgentID, "hostname": host,
+			"native_installers": nativeInstallers,
+			"protocol_version":  1, "agent_id": state.AgentID, "hostname": host,
 			"platform": platform, "arch": arch, "version": version,
 			"app_manifest_versions": manifestVersions,
 			"tls_spki_sha256":       state.SPKISHA256,

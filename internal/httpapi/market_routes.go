@@ -63,6 +63,10 @@ func registerMarket(mux *http.ServeMux, agentID string, store *pairing.Store, ap
 		authorized := func() bool { return store.Authorized(controller, agentID, token) }
 		var rec market.Record
 		var err error
+		if req.NativeInstaller != "" && name != "install" {
+			sendError(w, 422, "app_action", "原生安装器只支持安装")
+			return
+		}
 		if name == "adopt" {
 			rec, err = apps.Adopt(r.Context(), controller, req, authorized)
 		} else if name == "force_update" {

@@ -48,7 +48,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MarketInstall"
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/MarketInstall"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MarketNativeInstall"
+                  }
+                ]
               }
             }
           }
@@ -136,7 +143,7 @@
     "/v1/apps/status": {
       "post": {
         "operationId": "getMarketAppStatuses",
-        "summary": "批量返回操作结果及实时 Docker 状态",
+        "summary": "批量返回操作结果和目标主机的安装状态",
         "parameters": [
           {
             "$ref": "#/components/parameters/AgentId"
@@ -1446,6 +1453,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "mode": {
+            "type": "string",
+            "description": "原生 Maestro 安装返回 macos_homebrew。"
           }
         },
         "required": [
@@ -1469,7 +1480,8 @@
                   "partial",
                   "unknown",
                   "not_installed",
-                  "missing"
+                  "missing",
+                  "installed"
                 ]
               },
               "allowed": {
@@ -1477,6 +1489,10 @@
               },
               "external": {
                 "type": "boolean"
+              },
+              "version": {
+                "type": "string",
+                "description": "已核实的原生配方版本。"
               }
             },
             "required": [
@@ -1565,6 +1581,15 @@
               ]
             },
             "description": "支持的应用清单版本；旧 Agent 缺少此字段时仅按 v1 处理。"
+          },
+          "native_installers": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "maestro"
+              ]
+            },
+            "description": "当前主机支持的固定原生安装器。"
           }
         },
         "required": [
@@ -2401,6 +2426,27 @@
           "truncated"
         ],
         "additionalProperties": false
+      },
+      "MarketNativeInstall": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "app_id": {
+            "const": "maestro"
+          },
+          "native_installer": {
+            "const": "maestro"
+          }
+        },
+        "required": [
+          "source_id",
+          "app_id",
+          "native_installer"
+        ]
       }
     },
     "responses": {

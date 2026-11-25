@@ -309,3 +309,10 @@ GET /v1/tasks/44444444-4444-4444-8444-444444444444/logs?offset=0
 v2 应用在包内携带 `config.yaml`、`secrets.yaml` 及生成的脚本默认值模板。Agent 只从已校验字节读取定义，拒绝重复键、未知字段、无效类型或输入权限。`custom_input:false` 与 `editable:false` 都不允许请求覆盖；`editable` 缺省为 true。真实值写入 `<SOFTWARE_ROOT>/<应用>/config/.env` 和 `.secrets`，旧全局文件仅作为缺失项的迁移来源，已有非空凭据不轮换。安装、更新与旧应用接管后的更新使用同一迁移规则，卸载保留配置和数据。
 
 v1 清单继续使用原全局配置路径。应用配置定义不进入 Agent 自身的启动配置，不增加配置管理页面。跨仓库验证可设置 `DEPLOY_CONTRACT_ROOT` 后运行 `go test ./internal/market`；真实 Docker 生命周期与系统权限仍需目标主机验收。
+
+
+### macOS Maestro 原生安装
+
+macOS 登录用户运行的 Agent 在 `GET /v1/identity` 声明 `native_installers: ["maestro"]`。配对控制端向 `POST /v1/apps/install` 提交 `source_id`、`app_id: "maestro"` 和 `native_installer: "maestro"`。Agent 使用普通用户的标准 Homebrew 和固定官方配方，补齐 ADB，执行 CLI 版本检查。该安装器仅接受安装操作，支持部分失败后重试。
+
+轮询 `POST /v1/apps/status` 可获得 `mode: "macos_homebrew"`、安装回执及 `state`。完整安装返回 `installed` 和配方 `version`，待安装或需要重试返回 `not_installed`。缺少 Homebrew、来源冲突或无法核对配方时，返回 `allowed: false` 及具体原因。此流程不依赖 Docker Desktop。

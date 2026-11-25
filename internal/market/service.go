@@ -30,6 +30,7 @@ func (r Ref) valid() bool {
 
 type Request struct {
 	Ref
+	NativeInstaller string            `json:"native_installer,omitempty"`
 	OperationID     string            `json:"operation_id,omitempty"`
 	Digest          string            `json:"bundle_sha256,omitempty"`
 	Config          map[string]string `json:"config,omitempty"`
@@ -50,6 +51,7 @@ type Record struct {
 
 type Status struct {
 	Record
+	Version        string `json:"version,omitempty"`
 	State          string `json:"state"`
 	Allowed        bool   `json:"allowed"`
 	External       bool   `json:"external,omitempty"`
@@ -68,6 +70,7 @@ type Service struct {
 	ctx             context.Context
 	root, records   string
 	platform        string
+	brewPrefix      string
 	cache           *bundles.Store
 	scan            inventory
 	mu              sync.Mutex
@@ -77,7 +80,7 @@ type Service struct {
 }
 
 func New(ctx context.Context, cfg config.Config, grants string, cache *bundles.Store, scan inventory) (*Service, error) {
-	s := &Service{ctx: ctx, records: filepath.Join(cfg.DataDir, "app-records"), root: filepath.Join(cfg.SoftwareRoot, ".easyhostagent-apps"), platform: cfg.Platform, cache: cache, scan: scan}
+	s := &Service{ctx: ctx, records: filepath.Join(cfg.DataDir, "app-records"), root: filepath.Join(cfg.SoftwareRoot, ".easyhostagent-apps"), platform: cfg.Platform, brewPrefix: defaultBrewPrefix(), cache: cache, scan: scan}
 	if err := privateDir(s.records); err != nil {
 		return nil, err
 	}
@@ -147,7 +150,15 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 			return nil, errors.New("应用标识无效")
 		}
 	}
-	snap, scanErr := s.scan(ctx)
+	refs, needsDocker, err := s.statusRefs(refs, includeManaged)
+	if err != nil {
+		return nil, err
+	}
+	var snap dockerengine.GroupedInventory
+	var scanErr error
+	if needsDocker {
+		snap, scanErr = s.scan(ctx)
+	}
 	projects := map[string]dockerengine.Resource{}
 	for _, p := range snap.Resources {
 		if p.ComposeProject != "" {
@@ -156,35 +167,13 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if includeManaged {
-		seen := map[Ref]bool{}
-		for _, ref := range refs {
-			seen[ref] = true
-		}
-		entries, err := os.ReadDir(s.records)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range entries {
-			id, ok := strings.CutSuffix(e.Name(), ".json")
-			if !ok || !appID.MatchString(id) {
-				continue
-			}
-			rec, err := s.read(id)
-			if err != nil {
-				return nil, err
-			}
-			if rec.Managed && !seen[rec.Ref] {
-				refs = append(refs, rec.Ref)
-			}
-		}
-	}
 	result := make([]Status, 0, len(refs))
 	for _, ref := range refs {
 		r, err := s.read(ref.App)
 		if err != nil {
 			return nil, err
 		}
+		native := s.platform == "macos" && ref.App == "maestro" && (r.App == "" || r.Mode == macOSHomebrewMode)
 		foreign := r.App != "" && r.Source != ref.Source
 		if r.Ref != ref {
 			r = Record{Ref: ref}
@@ -194,6 +183,10 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 			row.BlockedReason = "grant_required"
 		} else if foreign {
 			row.BlockedReason = "source_conflict"
+		}
+		if native {
+			result = append(result, s.maestroStatus(row))
+			continue
 		}
 		if scanErr == nil && snap.Complete {
 			row.State = "not_installed"
@@ -269,6 +262,48 @@ func (s *Service) Status(ctx context.Context, controller string, refs []Ref, inc
 	return result, nil
 }
 
+// 只读原生工具不需要 Docker。混合批次仍只采集一次 Docker 清单。
+func (s *Service) statusRefs(refs []Ref, includeManaged bool) ([]Ref, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if includeManaged {
+		seen := map[Ref]bool{}
+		for _, ref := range refs {
+			seen[ref] = true
+		}
+		entries, err := os.ReadDir(s.records)
+		if err != nil {
+			return nil, false, err
+		}
+		for _, e := range entries {
+			id, ok := strings.CutSuffix(e.Name(), ".json")
+			if !ok || !appID.MatchString(id) {
+				continue
+			}
+			rec, err := s.read(id)
+			if err != nil {
+				return nil, false, err
+			}
+			if rec.Managed && !seen[rec.Ref] {
+				refs = append(refs, rec.Ref)
+			}
+		}
+	}
+	for _, ref := range refs {
+		if s.platform != "macos" || ref.App != "maestro" {
+			return refs, true, nil
+		}
+		rec, err := s.read(ref.App)
+		if err != nil {
+			return nil, false, err
+		}
+		if rec.App != "" && rec.Mode != macOSHomebrewMode {
+			return refs, true, nil
+		}
+	}
+	return refs, false, nil
+}
+
 func (s *Service) Start(ctx context.Context, controller, name string, req Request, authorized func() bool) (Record, error) {
 	if !req.Ref.valid() || (name != "install" && name != "update" && name != "uninstall") {
 		return Record{}, errors.New("应用或动作无效")
@@ -279,7 +314,12 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if !s.hasGrant(controller, req.Ref) || !authorized() {
 		return Record{}, ErrDenied
 	}
-	if (name == "install" || name == "update") && !bundles.ValidDigest(req.Digest) ||
+	if req.NativeInstaller != "" {
+		if req.NativeInstaller != "maestro" || req.App != "maestro" || name != "install" ||
+			req.Digest != "" || req.Config != nil || req.ConfirmExternal || req.OperationID != "" || !s.supportsMaestro() {
+			return Record{}, errors.New("原生安装仅支持 macOS 登录用户安装固定的 Maestro 配方")
+		}
+	} else if (name == "install" || name == "update") && !bundles.ValidDigest(req.Digest) ||
 		name == "update" && len(req.Config) != 0 ||
 		name == "uninstall" && (req.Digest != "" || len(req.Config) != 0) {
 		return Record{}, errors.New("动作参数无效")
@@ -310,6 +350,12 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	}
 	if old.App != "" && old.Source != req.Source {
 		return Record{}, ErrConflict
+	}
+	if req.NativeInstaller != "" {
+		return s.startMaestro(req, old, authorized)
+	}
+	if old.Mode == macOSHomebrewMode {
+		return Record{}, errors.New("原生 Maestro 仅接受专用安装请求")
 	}
 	if name == "update" && !old.Managed && !(s.platform == "macos" && req.App == "easynettopo") {
 		return Record{}, errors.New("应用尚未安装，请先安装")
@@ -494,7 +540,10 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 	a := m.Actions[rec.Action]
 	env := scriptEnvironment(s.platform)
 	var cmd *exec.Cmd
-	if rec.Mode == macOSEasyNetTopoMode {
+	if rec.Mode == macOSHomebrewMode {
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", maestroInstallScript, "maestro-install", s.brewPrefix)
+		env = maestroEnvironment(s.brewPrefix)
+	} else if rec.Mode == macOSEasyNetTopoMode {
 		// Only the fixed, previously installed Deploy macOS entry point may execute.
 		path, err := s.macOSEasyNetTopoScript()
 		if err != nil {
@@ -549,6 +598,10 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 		}
 		if errors.Is(err, ErrDenied) {
 			rec.Message = ErrDenied.Error()
+		}
+	} else if rec.Mode == macOSHomebrewMode {
+		if installed := s.maestroStatus(Status{Record: Record{Ref: rec.Ref}, Allowed: true}); installed.State != "installed" {
+			rec.Result, rec.Message = "failed", "未核实 Maestro 配方、CLI 和所需依赖，请检查后重试。"
 		}
 	} else if rec.Action == "uninstall" {
 		rec.Managed = false
