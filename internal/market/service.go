@@ -541,7 +541,7 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 	env := scriptEnvironment(s.platform)
 	var cmd *exec.Cmd
 	if rec.Mode == macOSHomebrewMode {
-		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", maestroInstallScript, "maestro-install", s.brewPrefix, s.records)
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", maestroInstallScript, "maestro-install", s.brewPrefix)
 		env = maestroEnvironment(s.brewPrefix)
 	} else if rec.Mode == macOSEasyNetTopoMode {
 		// Only the fixed, previously installed Deploy macOS entry point may execute.

@@ -315,6 +315,4 @@ v1 清单继续使用原全局配置路径。应用配置定义不进入 Agent �
 
 macOS 登录用户运行的 Agent 在 `GET /v1/identity` 声明 `native_installers: ["maestro"]`。配对控制端向 `POST /v1/apps/install` 提交 `source_id`、`app_id: "maestro"` 和 `native_installer: "maestro"`。Agent 使用普通用户的标准 Homebrew 和固定官方配方，补齐 ADB，执行 CLI 版本检查。该安装器仅接受安装操作，支持部分失败后重试。
 
-下载 `maestro.zip` 时，Agent 使用官方配方声明的发布地址和 SHA-256。已校验的 Homebrew 缓存可以直接复用。需要下载时，Agent 依次尝试 `gh-proxy.org`、`ghfast.top`、`ghproxy.net`，连接失败或文件校验失败就切到下一站，最后回退到 GitHub。下次需要下载时从上次首选站的下一站开始。这个策略内置于 Agent，只用于 Maestro 的发布包。Homebrew 配方、OpenJDK 和 ADB 仍按各自原有来源获取。
-
 轮询 `POST /v1/apps/status` 可获得 `mode: "macos_homebrew"`、安装回执及 `state`。完整安装返回 `installed` 和配方 `version`，待安装或需要重试返回 `not_installed`。缺少 Homebrew、来源冲突或无法核对配方时，返回 `allowed: false` 及具体原因。此流程不依赖 Docker Desktop。
