@@ -108,12 +108,12 @@ func (s *Service) startMacOSEasyNetTopoUpdate(ctx context.Context, req Request, 
 	if !found || !authorized() {
 		return Record{}, errors.New("macOS EasyNetTopo 部署不存在或配对授权已变化")
 	}
-	rec := Record{Ref: req.Ref, Mode: macOSEasyNetTopoMode, Digest: req.Digest,
+	rec := Record{Ref: req.Ref, OperationID: req.OperationID, Mode: macOSEasyNetTopoMode, Digest: req.Digest,
 		Action: "update", Result: "running", Managed: true, Services: m.Verification.Services}
 	if err := s.save(rec); err != nil {
 		return Record{}, errors.New("无法保存 macOS EasyNetTopo 更新记录")
 	}
-	s.active = req.App
+	s.active, s.activeOperation = req.App, rec.OperationID
 	s.jobs.Add(1)
 	go s.run(rec, m, filepath.Dir(s.root), filepath.Join(filepath.Dir(s.root), "deploy"), nil, authorized)
 	return rec, nil

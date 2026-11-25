@@ -30,6 +30,7 @@ func (r Ref) valid() bool {
 
 type Request struct {
 	Ref
+	OperationID     string            `json:"operation_id,omitempty"`
 	Digest          string            `json:"bundle_sha256,omitempty"`
 	Config          map[string]string `json:"config,omitempty"`
 	ConfirmExternal bool              `json:"confirm_external,omitempty"`
@@ -37,13 +38,14 @@ type Request struct {
 
 type Record struct {
 	Ref
-	Mode     string   `json:"mode,omitempty"`
-	Digest   string   `json:"bundle_sha256,omitempty"`
-	Action   string   `json:"action,omitempty"`
-	Result   string   `json:"result,omitempty"`
-	Message  string   `json:"message,omitempty"`
-	Managed  bool     `json:"managed"`
-	Services []string `json:"services,omitempty"`
+	OperationID string   `json:"operation_id,omitempty"`
+	Mode        string   `json:"mode,omitempty"`
+	Digest      string   `json:"bundle_sha256,omitempty"`
+	Action      string   `json:"action,omitempty"`
+	Result      string   `json:"result,omitempty"`
+	Message     string   `json:"message,omitempty"`
+	Managed     bool     `json:"managed"`
+	Services    []string `json:"services,omitempty"`
 }
 
 type Status struct {
@@ -63,19 +65,23 @@ var ErrConflict = errors.New("应用不属于本来源或主机上已存在同�
 type inventory func(context.Context) (dockerengine.GroupedInventory, error)
 
 type Service struct {
-	ctx           context.Context
-	root, records string
-	platform      string
-	cache         *bundles.Store
-	scan          inventory
-	mu            sync.Mutex
-	active        string
-	jobs          sync.WaitGroup
+	ctx             context.Context
+	root, records   string
+	platform        string
+	cache           *bundles.Store
+	scan            inventory
+	mu              sync.Mutex
+	active          string
+	activeOperation string
+	jobs            sync.WaitGroup
 }
 
 func New(ctx context.Context, cfg config.Config, grants string, cache *bundles.Store, scan inventory) (*Service, error) {
 	s := &Service{ctx: ctx, records: filepath.Join(cfg.DataDir, "app-records"), root: filepath.Join(cfg.SoftwareRoot, ".easyhostagent-apps"), platform: cfg.Platform, cache: cache, scan: scan}
 	if err := privateDir(s.records); err != nil {
+		return nil, err
+	}
+	if err := privateDir(filepath.Join(s.records, "operations")); err != nil {
 		return nil, err
 	}
 	// 旧版应用级授权参数仅用于兼容已有配置；管理权限由 HTTP 配对身份校验控制。
@@ -108,6 +114,12 @@ func (s *Service) save(r Record) error {
 	raw, err := json.Marshal(r)
 	if err != nil {
 		return err
+	}
+	// 先落盘独立回执，再发布应用的最新状态。任一步失败都不会启动新脚本。
+	if r.OperationID != "" {
+		if err := s.saveOperation(r.OperationID, raw); err != nil {
+			return err
+		}
 	}
 	return writeFile(filepath.Join(s.records, r.App+".json"), raw, 0600)
 }
@@ -261,6 +273,9 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if !req.Ref.valid() || (name != "install" && name != "update" && name != "uninstall") {
 		return Record{}, errors.New("应用或动作无效")
 	}
+	if req.OperationID != "" && (name != "update" || !validOperationID(req.OperationID)) {
+		return Record{}, errors.New("只有更新操作可以使用有效的任务编号")
+	}
 	if !s.hasGrant(controller, req.Ref) || !authorized() {
 		return Record{}, ErrDenied
 	}
@@ -271,6 +286,18 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if req.OperationID != "" {
+		prior, err := s.readOperation(req.OperationID)
+		if err != nil {
+			return Record{}, err
+		}
+		if prior.OperationID != "" {
+			if prior.Ref != req.Ref || prior.Digest != req.Digest {
+				return Record{}, ErrConflict
+			}
+			return prior, nil
+		}
+	}
 	if s.active != "" {
 		return Record{}, ErrBusy
 	}
@@ -371,13 +398,13 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 				return Record{}, err
 			}
 		}
-		rec := Record{Ref: req.Ref, Digest: req.Digest, Action: name,
+		rec := Record{Ref: req.Ref, OperationID: req.OperationID, Digest: req.Digest, Action: name,
 			Result: "running", Managed: true, Mode: legacyDeployMode,
 			Services: m.Verification.Services}
 		if err := s.save(rec); err != nil {
 			return Record{}, errors.New("无法保存原有 Deploy 应用操作记录")
 		}
-		s.active = req.App
+		s.active, s.activeOperation = req.App, rec.OperationID
 		s.jobs.Add(1)
 		go s.run(rec, m, filepath.Join(filepath.Dir(s.root), req.App),
 			s.legacyWorkdir(req.App), nil, authorized)
@@ -431,11 +458,11 @@ func (s *Service) Start(ctx context.Context, controller, name string, req Reques
 	if !authorized() {
 		return Record{}, ErrDenied
 	}
-	rec := Record{Ref: req.Ref, Digest: req.Digest, Action: name, Result: "running", Managed: true, Services: m.Verification.Services}
+	rec := Record{Ref: req.Ref, OperationID: req.OperationID, Digest: req.Digest, Action: name, Result: "running", Managed: true, Services: m.Verification.Services}
 	if err = s.save(rec); err != nil {
 		return Record{}, errors.New("无法保存安装记录")
 	}
-	s.active = req.App
+	s.active, s.activeOperation = req.App, rec.OperationID
 	s.jobs.Add(1)
 	go s.run(rec, m, root, work, values, authorized)
 	return rec, nil
@@ -528,7 +555,7 @@ func (s *Service) run(rec Record, m manifest, root, work string, values map[stri
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.active = ""
+	s.active, s.activeOperation = "", ""
 	if err := s.save(rec); err != nil {
 		// 保留磁盘上的中断标识，下次查询显示未知，避免谎报成功。
 		return
@@ -540,6 +567,6 @@ func (s *Service) finishLegacyFailure(rec Record, _ error) {
 	rec.Message = "原有 Deploy 脚本不可用或权限不安全"
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.active = ""
+	s.active, s.activeOperation = "", ""
 	_ = s.save(rec)
 }

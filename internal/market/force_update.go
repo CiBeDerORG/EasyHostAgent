@@ -177,7 +177,7 @@ func (s *Service) ForceUpdate(ctx context.Context, controller string, req Reques
 	if s.platform == "macos" {
 		return Record{}, errors.New("macOS 应用市场仅支持安装、更新和卸载")
 	}
-	if !req.ConfirmExternal || !req.Ref.valid() || !bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {
+	if req.OperationID != "" || !req.ConfirmExternal || !req.Ref.valid() || !bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {
 		return Record{}, errors.New("强制更新需要明确确认及有效的固定版本安装包")
 	}
 	if !s.hasGrant(controller, req.Ref) || !authorized() {

@@ -85,7 +85,7 @@ func (s *Service) legacyScript(app, action string) (string, error) {
 
 // 关联操作仅建立本机记录：必须先验证固定 Git 包及 Docker Compose 的原始身份，不执行任何脚本。
 func (s *Service) Adopt(ctx context.Context, controller string, req Request, authorized func() bool) (Record, error) {
-	if !req.Ref.valid() || !legacyDeployApp(req.App) ||
+	if req.OperationID != "" || !req.Ref.valid() || !legacyDeployApp(req.App) ||
 		!bundles.ValidDigest(req.Digest) || len(req.Config) != 0 {
 		return Record{}, errors.New("仅支持接管已验证的 Deploy Docker 应用")
 	}

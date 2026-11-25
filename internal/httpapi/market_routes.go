@@ -27,9 +27,19 @@ func registerMarket(mux *http.ServeMux, agentID string, store *pairing.Store, ap
 			var req struct {
 				Apps           []market.Ref `json:"apps"`
 				IncludeManaged bool         `json:"include_managed"`
+				OperationID    string       `json:"operation_id"`
 			}
 			if !decode(&req) {
 				sendError(w, 400, "invalid_request", "应用列表无效")
+				return
+			}
+			if req.OperationID != "" {
+				rows, err := apps.OperationStatus(req.OperationID, req.Apps, req.IncludeManaged)
+				if err != nil {
+					sendError(w, 400, "app_status", err.Error())
+					return
+				}
+				sendJSON(w, map[string]any{"apps": rows})
 				return
 			}
 			rows, err := apps.Status(r.Context(), controller, req.Apps, req.IncludeManaged)
@@ -61,16 +71,23 @@ func registerMarket(mux *http.ServeMux, agentID string, store *pairing.Store, ap
 			rec, err = apps.Start(r.Context(), controller, name, req, authorized)
 		}
 		if err != nil {
-			status := 422
-			switch {
-			case errors.Is(err, market.ErrDenied):
-				status = 403
-			case errors.Is(err, market.ErrBusy), errors.Is(err, market.ErrConflict):
-				status = 409
-			}
-			sendError(w, status, "app_action", err.Error())
+			status, code := marketActionError(err)
+			sendError(w, status, code, err.Error())
 			return
 		}
 		sendJSON(w, rec)
 	})))
+}
+
+func marketActionError(err error) (int, string) {
+	switch {
+	case errors.Is(err, market.ErrDenied):
+		return http.StatusForbidden, "app_action"
+	case errors.Is(err, market.ErrBusy):
+		return http.StatusConflict, "app_busy"
+	case errors.Is(err, market.ErrConflict):
+		return http.StatusConflict, "app_conflict"
+	default:
+		return http.StatusUnprocessableEntity, "app_action"
+	}
 }

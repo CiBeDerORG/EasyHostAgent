@@ -100,8 +100,12 @@ func materializeDeploy(softwareRoot, platform string, info bundles.CandidateInfo
 			if !ok || !trustedPathOwner(target, softwareRoot, platform, owner.Uid) {
 				return errors.New("已有部署文件所有者不可信")
 			}
-			if (strings.HasPrefix(destination, "deploy/lib/") && destination != "deploy/lib/app-config.sh") ||
-				strings.HasPrefix(destination, info.ApplicationID+"/config/") {
+			if strings.HasPrefix(destination, info.ApplicationID+"/config/") {
+				continue
+			}
+			// 部署脚本用到的版本清单、版本读取器和配置读取器随包更新。
+			if name, shared := strings.CutPrefix(destination, "deploy/lib/"); shared &&
+				!slices.Contains([]string{"versions.env", "versions.sh", "app-config.sh"}, name) {
 				continue
 			}
 		} else if !errors.Is(err, os.ErrNotExist) {
@@ -166,12 +170,12 @@ func (s *Service) startDirectDeploy(ctx context.Context, req Request, name strin
 	if !authorized() {
 		return Record{}, ErrDenied
 	}
-	rec := Record{Ref: req.Ref, Mode: directDeployMode, Digest: req.Digest, Action: name,
+	rec := Record{Ref: req.Ref, OperationID: req.OperationID, Mode: directDeployMode, Digest: req.Digest, Action: name,
 		Result: "running", Managed: true, Services: m.Verification.Services}
 	if err := s.save(rec); err != nil {
 		return Record{}, errors.New("无法保存 Deploy 应用操作记录")
 	}
-	s.active = req.App
+	s.active, s.activeOperation = req.App, rec.OperationID
 	s.jobs.Add(1)
 	go s.run(rec, m, softwareRoot, s.legacyWorkdir(req.App), values, authorized)
 	return rec, nil

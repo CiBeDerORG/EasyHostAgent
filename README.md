@@ -206,3 +206,7 @@ FnOS 目前仅根据 `/etc/os-release` 的 `ID/NAME/ID_LIKE` 和 `/etc/fnos-rele
 控制端通过已配对的 HTTP 或 HTTPS 连接调用 `POST /v1/apps/install`、`uninstall`、`status`（三个接口共用 `/v1/apps/` 前缀）。安装传 `source_id`、`app_id`、`bundle_sha256` 和清单允许的 `config`；卸载只传前两项。批量查询传 `{"apps":[{"source_id":"…","app_id":"…"}],"include_managed":true}`。动作受理后返回当前结果，后续查询同时获得执行结果和 Docker 运行状态。每台主机同时执行一个应用操作。
 
 每个应用使用独立的软件根目录 `<SOFTWARE_ROOT>/.easyhostagent-apps/<来源UUID>/<应用ID>/`。该目录下的 `deploy/.env` 和 `deploy/.secrets` 保存普通配置和密钥，卸载保留配置和应用数据。软件根目录及上级须防止被其他用户替换。脚本应按字面量读取这两份配置，每行 `KEY=VALUE`，读取时去除一层成对引号；禁止把配置作为 Shell 代码执行。包内脚本输出可能包含初始密码，接口仅返回结果与退出码。
+
+普通更新 `POST /v1/apps/update` 支持可选的 `operation_id`，格式为 `AT-<小写 UUID>`。Agent 在执行脚本前保存该编号、应用来源、应用 ID 和包摘要，受理回执带有同一编号。重复提交同一编号及相同目标和摘要时，Agent 返回已保存的执行结果。编号已用于其他目标或摘要时，返回 HTTP 409 和 `app_conflict`。主机正忙导致的 HTTP 409 使用 `app_busy`。
+
+控制端可向 `POST /v1/apps/status` 发送 `{"operation_id":"AT-…","apps":[{"source_id":"…","app_id":"…"}]}` 核对指定执行，只能指定一个应用，`include_managed` 可省略或设为 `false`。匹配的记录位于 `apps` 数组内，未找到时返回空数组。后续普通更新或强制更新均保留此前带编号的结果。若 Agent 在完成结果落盘前重启，该记录显示 `unknown`，由管理员核实。省略编号继续查询应用的最新状态。
